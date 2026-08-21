@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>神奇的乔治亚 · 项目索引</title>
+  <meta name="description" content="神奇的乔治亚的 HTML 项目索引页，点击即可快速使用">
+  <style>
+    /* ===== 主题变量：浅色模式 ===== */
+    :root {
+      --bg: #f5f6fa;
+      --bg-card: #ffffff;
+      --text: #1f2430;
+      --text-sub: #5c6370;
+      --accent: #4f7cff;
+      --accent-2: #9b59ff;
+      --border: rgba(0, 0, 0, 0.08);
+      --shadow: 0 8px 24px rgba(31, 36, 48, 0.08);
+      --shadow-hover: 0 16px 40px rgba(79, 124, 255, 0.18);
+    }
+
+    /* ===== 深色模式 ===== */
+    [data-theme="dark"] {
+      --bg: #12141c;
+      --bg-card: #1b1e2a;
+      --text: #e8eaf2;
+      --text-sub: #9aa1b2;
+      --accent: #6d93ff;
+      --accent-2: #b57bff;
+      --border: rgba(255, 255, 255, 0.08);
+      --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      --shadow-hover: 0 16px 40px rgba(109, 147, 255, 0.25);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      transition: background 0.4s ease, color 0.4s ease;
+      min-height: 100vh;
+    }
+
+    /* ===== 背景装饰光斑 ===== */
+    .bg-glow {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.35;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .glow-1 { width: 480px; height: 480px; background: var(--accent); top: -160px; right: -120px; }
+    .glow-2 { width: 380px; height: 380px; background: var(--accent-2); bottom: -140px; left: -100px; }
+
+    main { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+    /* ===== 顶部导航 ===== */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 28px 0;
+    }
+    .logo { font-weight: 700; font-size: 18px; letter-spacing: 1px; }
+    .logo span { color: var(--accent); }
+
+    .theme-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text);
+      font-size: 20px;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .theme-btn:hover { transform: rotate(30deg) scale(1.1); }
+
+    /* ===== 首屏区域 ===== */
+    .hero { text-align: center; padding: 72px 0 56px; }
+
+    .avatar {
+      width: 96px;
+      height: 96px;
+      margin: 0 auto 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 42px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: var(--shadow-hover);
+      animation: float 4s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    h1 {
+      font-size: clamp(32px, 6vw, 52px);
+      font-weight: 800;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 12px;
+    }
+
+    .tagline {
+      font-size: clamp(15px, 2.5vw, 19px);
+      color: var(--text-sub);
+      max-width: 560px;
+      margin: 0 auto 32px;
+    }
+    .tagline .cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      background: var(--accent);
+      vertical-align: -0.15em;
+      animation: blink 0.8s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* ===== 社交链接按钮 ===== */
+    .social-links { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+    .social-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 22px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 500;
+      box-shadow: var(--shadow);
+      transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+    }
+    .social-btn:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-hover);
+      border-color: var(--accent);
+    }
+
+    /* ===== 分区标题 ===== */
+    section h2 {
+      font-size: 26px;
+      font-weight: 700;
+      margin-bottom: 28px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    section h2::before {
+      content: "";
+      width: 6px;
+      height: 26px;
+      border-radius: 3px;
+      background: linear-gradient(180deg, var(--accent), var(--accent-2));
+    }
+
+    /* ===== 项目卡片网格 ===== */
+    .projects-section { padding: 40px 0 64px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 24px;
+    }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 26px;
+      box-shadow: var(--shadow);
+      transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    .card.visible {
+      opacity: 1;
+      transform: translateY(0);
+      transition: opacity 0.6s ease, transform 0.6s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    }
+    .card:hover {
+      transform: translateY(-8px) !important;
+      box-shadow: var(--shadow-hover);
+      border-color: var(--accent);
+    }
+    .card-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      margin-bottom: 18px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+    }
+    .card h3 { font-size: 19px; margin-bottom: 8px; }
+    .card p { font-size: 14px; color: var(--text-sub); margin-bottom: 18px; min-height: 44px; }
+    .card-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .card-link:hover { text-decoration: underline; }
+
+    /* ===== 页脚 ===== */
+    footer {
+      text-align: center;
+      padding: 36px 24px 48px;
+      color: var(--text-sub);
+      font-size: 13px;
+      border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ===== 小屏适配 ===== */
+    @media (max-width: 520px) {
+      .hero { padding: 48px 0 40px; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-glow glow-1"></div>
+  <div class="bg-glow glow-2"></div>
+
+  <main>
+    <!-- 顶部：站名 + 深色模式开关 -->
+    <header>
+      <div class="logo">乔治亚<span>.lab</span></div>
+      <button class="theme-btn" id="themeBtn" title="切换深色 / 浅色模式" aria-label="切换主题">🌙</button>
+    </header>
+
+    <!-- 首屏 -->
+    <section class="hero">
+      <div class="avatar">🧜</div>
+      <h1>你好，我是神奇的乔治亚</h1>
+      <p class="tagline">
+        <span id="typewriter"></span><span class="cursor"></span>
+      </p>
+      <nav class="social-links">
+        <a class="social-btn" href="https://github.com/sqdqzy" target="_blank" rel="noopener">🐙 GitHub</a>
+        <a class="social-btn" href="https://space.bilibili.com/630509429" target="_blank" rel="noopener">📺 哔哩哔哩</a>
+      </nav>
+    </section>
+
+    <!-- 项目索引区 -->
+    <section class="projects-section">
+      <h2>我的 HTML 项目</h2>
+      <div class="grid" id="projectGrid"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>本页所有项目均与 <a href="https://github.com/sst/opencode" target="_blank" rel="noopener">OpenCode</a> 共同创作 🤝</p>
+    <p>© 2026 神奇的乔治亚 · Powered by GitHub Pages</p>
+  </footer>
+
+  <script>
+    // ===== 打字机效果 =====
+    const sentences = [
+      "这里是我的 HTML 项目索引页",
+      "点开卡片即可直接使用，无需下载",
+      "所有项目与 OpenCode 共同创作"
+    ];
+    const typeTarget = document.getElementById("typewriter");
+    let si = 0, ci = 0, deleting = false;
+
+    function typeLoop() {
+      const current = sentences[si];
+      typeTarget.textContent = current.slice(0, ci);
+      let delay = deleting ? 40 : 110;
+
+      if (!deleting && ci === current.length) {
+        delay = 2000;           // 整句停留
+        deleting = true;
+      } else if (deleting && ci === 0) {
+        deleting = false;
+        si = (si + 1) % sentences.length;
+        delay = 400;
+      } else {
+        ci += deleting ? -1 : 1;
+      }
+      setTimeout(typeLoop, delay);
+    }
+    typeLoop();
+
+    // ===== 深色 / 浅色模式切换（记忆用户选择）=====
+    const themeBtn = document.getElementById("themeBtn");
+    const savedTheme = localStorage.getItem("theme");
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+    function applyTheme(mode) {
+      document.documentElement.setAttribute("data-theme", mode);
+      themeBtn.textContent = mode === "dark" ? "☀️" : "🌙";
+      localStorage.setItem("theme", mode);
+    }
+    applyTheme(savedTheme || (prefersDark ? "dark" : "light"));
+
+    themeBtn.addEventListener("click", () => {
+      const now = document.documentElement.getAttribute("data-theme");
+      applyTheme(now === "dark" ? "light" : "dark");
+    });
+
+    // ===== 项目数据：以后新增项目，直接在这里加一条即可 =====
+    const projects = [
+      {
+        icon: "🖥️",
+        title: "dsh-desktop",
+        desc: "桌面工具项目，点击前往仓库查看与使用。",
+        link: "https://github.com/sqdqzy/dsh-desktop"
+      },
+      {
+        icon: "🧠",
+        title: "operit-multi-agent-skills",
+        desc: "Operit 多 Agent 并发 Skills，教 AI 通过 OpenCode 并发出子 Agent 执行任务。",
+        link: "https://github.com/sqdqzy/operit-multi-agent-skills"
+      }
+    ];
+
+    const grid = document.getElementById("projectGrid");
+    grid.innerHTML = projects.map(p => `
+      <article class="card">
+        <div class="card-icon">${p.icon}</div>
+        <h3>${p.title}</h3>
+        <p>${p.desc}</p>
+        <a class="card-link" href="${p.link}" target="_blank" rel="noopener">立即使用 →</a>
+      </article>
+    `).join("");
+
+    // ===== 卡片滚动入场动画 =====
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach((entry, i) => {
+        if (entry.isIntersecting) {
+          setTimeout(() => entry.target.classList.add("visible"), i * 120);
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15 });
+    document.querySelectorAll(".card").forEach(card => observer.observe(card));
+  </script>
+</body>
+</html>
