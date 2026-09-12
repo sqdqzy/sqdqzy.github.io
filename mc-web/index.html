@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MC Web</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
+canvas { display: block; }
+#blocker {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.6);
+  cursor: pointer;
+  user-select: none;
+}
+#blocker .title { font-size: 48px; color: #fff; margin-bottom: 20px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+#blocker .subtitle { font-size: 18px; color: #ccc; }
+#blocker .click-msg { font-size: 24px; color: #fff; background: #4a4; padding: 12px 32px; border-radius: 8px; margin-top: 30px; animation: pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.05); } }
+
+#crosshair {
+  position: fixed; top: 50%; left: 50%; z-index: 50;
+  transform: translate(-50%,-50%);
+  pointer-events: none;
+}
+#crosshair::before, #crosshair::after {
+  content: ''; position: absolute; background: rgba(255,255,255,0.8);
+}
+#crosshair::before { width: 2px; height: 20px; left: -1px; top: -10px; }
+#crosshair::after { width: 20px; height: 2px; left: -10px; top: -1px; }
+#debug {
+  position: fixed; top: 10px; left: 10px; z-index: 40;
+  color: #fff; font-size: 13px; font-family: 'Consolas', monospace;
+  background: rgba(0,0,0,0.5); padding: 8px 12px; border-radius: 4px;
+  pointer-events: none; user-select: none;
+  line-height: 1.5;
+}
+#loading-bar-wrap {
+  position: fixed; bottom: 80px; left: 50%; z-index: 45;
+  transform: translateX(-50%);
+  width: 200px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px;
+  overflow: hidden; display: none;
+}
+#loading-bar {
+  height: 100%; width: 0%; background: #4a4; border-radius: 2px;
+  transition: width 0.3s;
+}
+#hotbar {
+  position: fixed; bottom: 20px; left: 50%; z-index: 50;
+  transform: translateX(-50%);
+  display: flex; gap: 2px;
+  background: rgba(0,0,0,0.6); padding: 4px; border-radius: 4px;
+}
+#hotbar .slot {
+  width: 58px; height: 58px;
+  background: rgba(255,255,255,0.1);
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 2px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.1s;
+  position: relative;
+}
+#hotbar .slot.active { border-color: #fff; background: rgba(255,255,255,0.2); }
+#hotbar .slot canvas { width: 32px; height: 32px; image-rendering: pixelated; }
+#hotbar .slot .key-hint {
+  position: absolute; top: 2px; left: 4px;
+  color: rgba(255,255,255,0.6); font-size: 10px;
+  font-family: 'Consolas', monospace;
+}
+</style>
+</head>
+<body>
+
+<div id="blocker">
+  <div style="text-align:center">
+    <div class="title">MC Web</div>
+    <div class="subtitle">网页版 Minecraft</div>
+    <div class="click-msg">点击开始游戏</div>
+  </div>
+</div>
+
+<div id="crosshair"></div>
+<div id="debug">加载中...</div>
+<div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+<div id="hotbar"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+// ===================== 纹理生成 =====================
+function genTex() {
+  const S = 16, T = {};
+  function mk(n, fn) {
+    const c = document.createElement('canvas'); c.width = S; c.height = S;
+    fn(c.getContext('2d'), S);
+    const t = new THREE.CanvasTexture(c);
+    t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
+    T[n] = t;
+  }
+  function fl(ctx, s, c) { ctx.fillStyle = c; ctx.fillRect(0, 0, s, s); }
+  function px(ctx, x, y, c) { ctx.fillStyle = c; ctx.fillRect(x, y, 1, 1); }
+  function hl(ctx, x, y, w, c) { ctx.fillStyle = c; ctx.fillRect(x, y, w, 1); }
+  function vl(ctx, x, y, h, c) { ctx.fillStyle = c; ctx.fillRect(x, y, 1, h); }
+
+  mk('grass_top', (ctx, s) => {
+    fl(ctx, s, '#6abe4e'); ctx.fillStyle = '#4a9e2e';
+    for (let i = 0; i < 8; i++) hl(ctx, (Math.random()*12)|0, (Math.random()*s)|0, 3+(Math.random()*4)|0, '#4a9e2e');
+    for (let i = 0; i < 6; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#7ace5e');
+  });
+  mk('grass_side', (ctx, s) => {
+    fl(ctx, s, '#6abe4e');
+    for (let y = 0; y < 7; y++) for (let x = 0; x < s; x++) px(ctx, x, y, '#6abe4e');
+    for (let y = 5; y < 8; y++) for (let x = 0; x < s; x++) if (Math.random() > 0.3) px(ctx, x, y, '#5a9e3e');
+    for (let y = 8; y < s; y++) for (let x = 0; x < s; x++) px(ctx, x, y, '#8b6b3a');
+    for (let i = 0; i < 12; i++) px(ctx, (Math.random()*s)|0, 8+(Math.random()*8)|0, '#7a5b2a');
+    hl(ctx, 0, 4, s, '#5a9e3e'); hl(ctx, 0, 7, s, '#5a9e3e');
+  });
+  mk('dirt', (ctx, s) => {
+    fl(ctx, s, '#8b6b3a'); ctx.fillStyle = '#7a5b2a';
+    for (let i = 0; i < 20; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#7a5b2a');
+    for (let i = 0; i < 10; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#9a7b4a');
+    hl(ctx, 0, 4, s, '#7a5b2a'); hl(ctx, 0, 10, s, '#7a5b2a');
+  });
+  mk('stone', (ctx, s) => {
+    fl(ctx, s, '#8a8a8a');
+    for (let i = 0; i < 30; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#9a9a9a');
+    for (let i = 0; i < 20; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#7a7a7a');
+    vl(ctx, 5, 0, s, '#999'); vl(ctx, 11, 0, s, '#777'); hl(ctx, 0, 8, s, '#999');
+  });
+  mk('cobblestone', (ctx, s) => {
+    fl(ctx, s, '#777');
+    for (let i = 0; i < 6; i++) {
+      const x = (Math.random()*10+2)|0, y = (Math.random()*10+2)|0;
+      ctx.fillStyle = Math.random()>0.5?'#666':'#888';
+      ctx.fillRect(x, y, 2+(Math.random()*3)|0, 2+(Math.random()*2)|0);
+    }
+  });
+  mk('oak_log_top', (ctx, s) => {
+    fl(ctx, s, '#9b8a5a'); ctx.fillStyle = '#6a5a2a';
+    ctx.fillRect(3, 3, 10, 10); ctx.fillRect(7, 0, 2, 16); ctx.fillRect(0, 7, 16, 2);
+    ctx.fillStyle = '#8b7a4a'; ctx.fillRect(5, 5, 6, 6);
+    ctx.fillStyle = '#5a4a1a'; ctx.fillRect(7, 7, 2, 2);
+  });
+  mk('oak_log_side', (ctx, s) => {
+    fl(ctx, s, '#8b7a4a');
+    for (let y = 0; y < s; y += 4) hl(ctx, 0, y, s, '#6a5a2a');
+    for (let i = 0; i < 6; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#9b8a5a');
+    vl(ctx, 2, 0, s, '#7a6a3a'); vl(ctx, 8, 0, s, '#7a6a3a'); vl(ctx, 14, 0, s, '#7a6a3a');
+  });
+  mk('oak_planks', (ctx, s) => {
+    fl(ctx, s, '#b89a5a');
+    for (let y = 0; y < s; y += 4) hl(ctx, 0, y, s, '#a88a4a');
+    for (let y = 2; y < s; y += 4) hl(ctx, 0, y, s, '#c8aa6a');
+    vl(ctx, 7, 0, s, '#a88a4a');
+  });
+  mk('oak_leaves', (ctx, s) => {
+    fl(ctx, s, '#3a8a2a');
+    for (let i = 0; i < 40; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#4a9a3a');
+    for (let i = 0; i < 30; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#2a7a1a');
+    for (let i = 0; i < 10; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#5aaa4a');
+  });
+  mk('bedrock', (ctx, s) => {
+    fl(ctx, s, '#555');
+    for (let i = 0; i < 30; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#666');
+    for (let i = 0; i < 15; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#444');
+    hl(ctx, 0, 6, s, '#444'); hl(ctx, 0, 13, s, '#666');
+  });
+  mk('sand', (ctx, s) => {
+    fl(ctx, s, '#d4b86a');
+    for (let i = 0; i < 15; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#c4a85a');
+    for (let i = 0; i < 10; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#e4c87a');
+    hl(ctx, 0, 5, s, '#c4a85a'); hl(ctx, 0, 11, s, '#e4c87a');
+  });
+  return T;
+}
+
+// ===================== 方块 =====================
+const B = { AIR:0, GRASS:1, DIRT:2, STONE:3, COBBLESTONE:4, OAK_LOG:5, OAK_PLANKS:6, OAK_LEAVES:7, BEDROCK:8, SAND:9 };
+const BN = {}; BN[B.AIR]='空气'; BN[B.GRASS]='草方块'; BN[B.DIRT]='泥土'; BN[B.STONE]='石头';
+BN[B.COBBLESTONE]='圆石'; BN[B.OAK_LOG]='橡木原木'; BN[B.OAK_PLANKS]='橡木木板';
+BN[B.OAK_LEAVES]='树叶'; BN[B.BEDROCK]='基岩'; BN[B.SAND]='沙子';
+
+const BF = {
+  [B.GRASS]:{top:'grass_top',bottom:'dirt',side:'grass_side'}, [B.DIRT]:{all:'dirt'},
+  [B.STONE]:{all:'stone'}, [B.COBBLESTONE]:{all:'cobblestone'},
+  [B.OAK_LOG]:{top:'oak_log_top',bottom:'oak_log_top',side:'oak_log_side'},
+  [B.OAK_PLANKS]:{all:'oak_planks'}, [B.OAK_LEAVES]:{all:'oak_leaves'},
+  [B.BEDROCK]:{all:'bedrock'}, [B.SAND]:{all:'sand'},
+};
+const BT = { [B.AIR]:true, [B.OAK_LEAVES]:true };
+function isT(id) { return BT[id]||false; }
+function isS(id) { return id!==B.AIR && !BT[id]; }
+const HB = [B.GRASS, B.DIRT, B.STONE, B.COBBLESTONE, B.OAK_PLANKS, B.OAK_LOG, B.SAND];
+
+// ===================== 噪声 =====================
+function h2(x, y) {
+  let h = x*374761393 + y*668265263;
+  h = ((h^(h>>13))*1274126177)|0;
+  return ((h^(h>>16))&0x7fffffff)/0x7fffffff;
+}
+function sn(x, y, f) {
+  const fx=x*f, fy=y*f; const ix=fx|0, iy=fy|0;
+  const dx=fx-ix, dy=fy-iy, sx=dx*dx*(3-2*dx), sy=dy*dy*(3-2*dy);
+  return h2(ix,iy)*(1-sx)*(1-sy) + h2(ix+1,iy)*sx*(1-sy) + h2(ix,iy+1)*(1-sx)*sy + h2(ix+1,iy+1)*sx*sy;
+}
+function th(wx, wz) { return (sn(wx,wz,0.02)*12 + sn(wx,wz,0.05)*4 + sn(wx,wz,0.01)*8 + 6)|0; }
+
+// ===================== 世界 =====================
+const CS=16, CH=64;
+
+class World {
+  constructor(tex) {
+    this.tex = tex;
+    this.chunks = new Map();    // key -> Uint8Array
+    this.meshes = new Map();    // key -> THREE.Mesh
+    this.dirty = new Set();     // keys needing mesh rebuild
+    this.pending = [];          // [{cx,cz,key}]
+    this.generating = new Set();
+
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x87ceeb);
+    this.scene.fog = new THREE.Fog(0x87ceeb, 40, 80);
+
+    this.scene.add(new THREE.AmbientLight(0x8888ff, 0.5));
+    const sun = new THREE.DirectionalLight(0xffeedd, 0.8);
+    sun.position.set(50, 100, 30); this.scene.add(sun);
+    this.scene.add(new THREE.HemisphereLight(0x87ceeb, 0x3a7a2a, 0.3));
+
+    this.needed = new Set();
+    this.viewDist = 4;
+
+    // 面定义: dir, normal, vertices[x,y,z], uvFn(v=>[u,v])
+    this.faces = [
+      { d:[0,1,0], n:[0,1,0], v:[[0,1,0],[1,1,0],[1,1,1],[0,1,1]], uv:v=>[v[0],1-v[2]] },
+      { d:[0,-1,0], n:[0,-1,0], v:[[1,0,0],[0,0,0],[0,0,1],[1,0,1]], uv:v=>[v[0],1-v[2]] },
+      { d:[0,0,1], n:[0,0,1], v:[[0,0,1],[1,0,1],[1,1,1],[0,1,1]], uv:v=>[v[0],1-v[1]] },
+      { d:[0,0,-1], n:[0,0,-1], v:[[1,0,0],[0,0,0],[0,1,0],[1,1,0]], uv:v=>[v[0],1-v[1]] },
+      { d:[-1,0,0], n:[-1,0,0], v:[[0,0,1],[0,1,1],[0,1,0],[0,0,0]], uv:v=>[v[2],1-v[1]] },
+      { d:[1,0,0], n:[1,0,0], v:[[1,0,0],[1,1,0],[1,1,1],[1,0,1]], uv:v=>[v[2],1-v[1]] },
+    ];
+    this.fnames = ['top','bottom','front','back','left','right'];
+  }
+
+  ck(cx, cz) { return cx+','+cz; }
+
+  gb(wx, wy, wz) {
+    if (wy<0||wy>=CH) return B.AIR;
+    const cx=Math.floor(wx/CS), cz=Math.floor(wz/CS);
+    const lx=((wx%CS)+CS)%CS, lz=((wz%CS)+CS)%CS;
+    const d = this.chunks.get(this.ck(cx, cz));
+    return d ? d[(wy*CS+lz)*CS+lx] : B.AIR;
+  }
+
+  sb(wx, wy, wz, id) {
+    if (wy<0||wy>=CH) return;
+    const cx=Math.floor(wx/CS), cz=Math.floor(wz/CS);
+    const lx=((wx%CS)+CS)%CS, lz=((wz%CS)+CS)%CS;
+    let d = this.chunks.get(this.ck(cx, cz));
+    if (!d) { d = new Uint8Array(CS*CH*CS); this.chunks.set(this.ck(cx,cz), d); }
+    d[(wy*CS+lz)*CS+lx] = id;
+    this.dirty.add(this.ck(cx,cz));
+    if (lx===0) this.dirty.add(this.ck(cx-1,cz));
+    if (lx===CS-1) this.dirty.add(this.ck(cx+1,cz));
+    if (lz===0) this.dirty.add(this.ck(cx,cz-1));
+    if (lz===CS-1) this.dirty.add(this.ck(cx,cz+1));
+  }
+
+  genChunkData(cx, cz) {
+    const key = this.ck(cx, cz);
+    const d = new Uint8Array(CS*CH*CS);
+    this.chunks.set(key, d);
+    for (let lx=0; lx<CS; lx++) for (let lz=0; lz<CS; lz++) {
+      const wx=cx*CS+lx, wz=cz*CS+lz, h=th(wx,wz);
+      for (let wy=0; wy<CH; wy++) {
+        let b = B.AIR;
+        if (wy===0) b=B.BEDROCK;
+        else if (wy<h-3) b=B.STONE;
+        else if (wy<h-1) b=B.DIRT;
+        else if (wy===h) b=B.GRASS;
+        d[(wy*CS+lz)*CS+lx] = b;
+      }
+      if (d[(h*CS+lz)*CS+lx]===B.GRASS && Math.random()<0.006) this._tree(wx, h+1, wz);
+    }
+    this.dirty.add(key);
+  }
+
+  _tree(wx, wy, wz) {
+    const th = 4+(Math.random()*3)|0;
+    for (let i=0; i<th; i++) this.sb(wx, wy+i, wz, B.OAK_LOG);
+    const lb = wy+th-2;
+    for (let dx=-2; dx<=2; dx++) for (let dz=-2; dz<=2; dz++) for (let dy=-1; dy<=2; dy++) {
+      if (Math.abs(dx)+Math.abs(dy)+Math.abs(dz)<=3 && !(dx===0&&dz===0&&dy<0)) {
+        const lx=wx+dx, ly=lb+dy, lz=wz+dz;
+        if (ly>=0 && ly<CH && this.gb(lx,ly,lz)===B.AIR) this.sb(lx,ly,lz, B.OAK_LEAVES);
+      }
+    }
+  }
+
+  rebuildChunk(cx, cz) {
+    const key = this.ck(cx, cz);
+    const d = this.chunks.get(key);
+    if (!d) return;
+
+    // 移除旧网格
+    const old = this.meshes.get(key);
+    if (old) { this.scene.remove(old); this._dispose(old); }
+
+    // 按纹理分组收集顶点
+    const grps = {}; // texName -> {pos:[], nrm:[], uv:[], vc:0}
+
+    for (let lx=0; lx<CS; lx++) for (let ly=0; ly<CH; ly++) for (let lz=0; lz<CS; lz++) {
+      const bid = d[(ly*CS+lz)*CS+lx];
+      if (bid===0) continue;
+      const wx=cx*CS+lx, wz=cz*CS+lz;
+      for (let f=0; f<6; f++) {
+        const fc = this.faces[f];
+        const nx=lx+fc.d[0], ny=ly+fc.d[1], nz=lz+fc.d[2];
+        let nb;
+        if (nx<0||nx>=CS||nz<0||nz>=CS) nb=this.gb(wx+fc.d[0], ny, wz+fc.d[2]);
+        else if (ny<0||ny>=CH) nb=B.AIR;
+        else nb=d[(ny*CS+nz)*CS+nx];
+        if (nb!==B.AIR && !isT(nb)) continue;
+
+        const def = BF[bid];
+        const tn = def.all || def[this.fnames[f]] || def.side || 'dirt';
+        if (!grps[tn]) grps[tn] = { pos:[], nrm:[], uv:[], vc:0 };
+        const g = grps[tn];
+        for (const v of fc.v) {
+          g.pos.push(lx+v[0], ly+v[1], lz+v[2]);
+          g.nrm.push(fc.n[0], fc.n[1], fc.n[2]);
+          const u = fc.uv(v);
+          g.uv.push(u[0], u[1]);
+          g.vc++;
+        }
+      }
+    }
+
+    const keys = Object.keys(grps);
+    if (keys.length===0) return;
+
+    // 按纹理顺序合并
+    const allPos=[], allNrm=[], allUv=[], allIdx=[], matKeys=[];
+    for (const tn of keys) {
+      const g = grps[tn];
+      const vo = allPos.length/3;
+      for (let i=0; i<g.pos.length; i++) allPos.push(g.pos[i]);
+      for (let i=0; i<g.nrm.length; i++) allNrm.push(g.nrm[i]);
+      for (let i=0; i<g.uv.length; i++) allUv.push(g.uv[i]);
+      for (let i=0; i<g.vc; i+=4) {
+        allIdx.push(vo+i, vo+i+1, vo+i+2, vo+i, vo+i+2, vo+i+3);
+      }
+      matKeys.push(tn);
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(allPos, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(allNrm, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(allUv, 2));
+    geo.setIndex(allIdx);
+
+    const mats = matKeys.map(n => new THREE.MeshLambertMaterial({ map: this.tex[n] }));
+    let idxOff = 0;
+    for (let i=0; i<matKeys.length; i++) {
+      const g = grps[matKeys[i]];
+      const cnt = (g.vc/4)*6;
+      geo.addGroup(idxOff, cnt, i);
+      idxOff += cnt;
+    }
+
+    const mesh = new THREE.Mesh(geo, mats);
+    mesh.position.set(cx*CS, 0, cz*CS);
+    this.scene.add(mesh);
+    this.meshes.set(key, mesh);
+  }
+
+  _dispose(mesh) {
+    mesh.geometry.dispose();
+    const ms = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    ms.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
+  }
+
+  removeChunk(key) {
+    const old = this.meshes.get(key);
+    if (old) { this.scene.remove(old); this._dispose(old); }
+    this.meshes.delete(key);
+    this.chunks.delete(key);
+  }
+
+  setView(cx, cz) {
+    this.needed.clear();
+    const d = this.viewDist;
+    for (let dx=-d; dx<=d; dx++) for (let dz=-d; dz<=d; dz++) this.needed.add(this.ck(cx+dx, cz+dz));
+  }
+
+  updateLoading() {
+    // 先收集要删除的key，避免迭代中修改Map
+    const toRemove = [];
+    for (const key of this.chunks.keys()) if (!this.needed.has(key)) toRemove.push(key);
+    toRemove.forEach(k => this.removeChunk(k));
+
+    // 添加待生成
+    for (const key of this.needed) {
+      if (!this.chunks.has(key) && !this.generating.has(key)) {
+        const [x, z] = key.split(',').map(Number);
+        this.pending.push({ cx:x, cz:z, key });
+        this.generating.add(key);
+      }
+    }
+
+    // 每帧生成 2 个区块
+    for (let i=0; i<2 && this.pending.length>0; i++) {
+      const p = this.pending.shift();
+      this.genChunkData(p.cx, p.cz);
+    }
+
+    // 重建脏网格
+    const dirtyKeys = [...this.dirty];
+    this.dirty.clear();
+    for (const key of dirtyKeys) {
+      if (this.chunks.has(key)) {
+        const [x, z] = key.split(',').map(Number);
+        this.rebuildChunk(x, z);
+      }
+    }
+
+    // 进度条
+    const lb = document.getElementById('loading-bar'), lw = document.getElementById('loading-bar-wrap');
+    const total = this.needed.size;
+    const done = total - this.pending.length;
+    if (this.pending.length>0) { lw.style.display='block'; lb.style.width=Math.min(100,(done/Math.max(total,1))*100)+'%'; }
+    else lw.style.display='none';
+  }
+}
+
+// ===================== 玩家 =====================
+class Player {
+  constructor(cam) {
+    this.cam=cam; this.pos=new THREE.Vector3(0,25,0); this.vel=new THREE.Vector3(0,0,0);
+    this.yaw=0; this.pitch=0; this.ground=false;
+    this.spd=5; this.jmp=8; this.grv=-25; this.w=0.6; this.h=1.8; this.eh=1.6;
+  }
+  eye() { return new THREE.Vector3(this.pos.x, this.pos.y+this.eh, this.pos.z); }
+  abb(x,y,z) { const hw=this.w/2; return {min:[x-hw,y,z-hw], max:[x+hw,y+this.h,z+hw]}; }
+  coll(a, w) {
+    for (let x=Math.floor(a.min[0]); x<=Math.floor(a.max[0]); x++)
+      for (let y=Math.floor(a.min[1]); y<=Math.floor(a.max[1]); y++)
+        for (let z=Math.floor(a.min[2]); z<=Math.floor(a.max[2]); z++) {
+          const b=w.gb(x,y,z); if (b!==B.AIR&&isS(b)) return true;
+        }
+    return false;
+  }
+  tick(dt, w, keys) {
+    const f=new THREE.Vector3(-Math.sin(this.yaw),0,-Math.cos(this.yaw));
+    const r=new THREE.Vector3(Math.cos(this.yaw),0,-Math.sin(this.yaw));
+    const m=new THREE.Vector3();
+    if (keys['KeyW']||keys['w']) m.add(f); if (keys['KeyS']||keys['s']) m.sub(f);
+    if (keys['KeyA']||keys['a']) m.sub(r); if (keys['KeyD']||keys['d']) m.add(r);
+    if (m.lengthSq()>0) m.normalize().multiplyScalar(this.spd);
+    if ((keys['Space']||keys['KeyK'])&&this.ground) { this.vel.y=this.jmp; this.ground=false; }
+    this.vel.y+=this.grv*dt; if (this.vel.y<-30) this.vel.y=-30;
+    this.vel.x=m.x; this.vel.z=m.z;
+    const nx=this.pos.x+this.vel.x*dt; if (!this.coll(this.abb(nx,this.pos.y,this.pos.z),w)) this.pos.x=nx; else this.vel.x=0;
+    const nz=this.pos.z+this.vel.z*dt; if (!this.coll(this.abb(this.pos.x,this.pos.y,nz),w)) this.pos.z=nz; else this.vel.z=0;
+    const ny=this.pos.y+this.vel.y*dt;
+    if (!this.coll(this.abb(this.pos.x,ny,this.pos.z),w)) { this.pos.y=ny; this.ground=false; }
+    else { if (this.vel.y<0) this.ground=true; this.vel.y=0; }
+    this.cam.position.copy(this.eye());
+    this.cam.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
+  }
+}
+
+// ===================== 交互 =====================
+class Interact {
+  constructor(w, cam) {
+    this.w=w; this.cam=cam; this.reach=7;
+    const g=new THREE.BoxGeometry(1.005,1.005,1.005);
+    const m=new THREE.MeshBasicMaterial({color:0xffffff,wireframe:true,transparent:true,opacity:0.3,depthTest:true});
+    this.hl=new THREE.Mesh(g,m); this.hl.visible=false; this.w.scene.add(this.hl);
+  }
+  cast() {
+    const o=this.cam.position;
+    const d=new THREE.Vector3(0,0,-1).applyQuaternion(this.cam.quaternion).normalize();
+    let x=Math.floor(o.x), y=Math.floor(o.y), z=Math.floor(o.z);
+    const sx=d.x>0?1:-1, sy=d.y>0?1:-1, sz=d.z>0?1:-1;
+    const tdx=Math.abs(1/d.x), tdy=Math.abs(1/d.y), tdz=Math.abs(1/d.z);
+    const inf=Infinity;
+    let tmx=d.x!==0?((d.x>0?(x+1-o.x):(o.x-x))/d.x):inf;
+    let tmy=d.y!==0?((d.y>0?(y+1-o.y):(o.y-y))/d.y):inf;
+    let tmz=d.z!==0?((d.z>0?(z+1-o.z):(o.z-z))/d.z):inf;
+    let lx=x, ly=y, lz=z, face=0;
+
+    for (let i=0; i<this.reach*3; i++) {
+      const b=this.w.gb(x,y,z);
+      if (b!==B.AIR) {
+        this.hl.position.set(x+0.5,y+0.5,z+0.5); this.hl.visible=true;
+        return {hit:true, x, y, z, face, px:lx, py:ly, pz:lz};
+      }
+      lx=x; ly=y; lz=z;
+      if (tmx<tmy) {
+        if (tmx<tmz) { x+=sx; tmx+=tdx; face=sx>0?4:5; }
+        else { z+=sz; tmz+=tdz; face=sz>0?2:3; }
+      } else {
+        if (tmy<tmz) { y+=sy; tmy+=tdy; face=sy>0?1:0; }
+        else { z+=sz; tmz+=tdz; face=sz>0?2:3; }
+      }
+      if (y<0||y>=CH) break;
+    }
+    this.hl.visible=false;
+    return {hit:false};
+  }
+  brk(r) { if (r&&r.hit) this.w.sb(r.x,r.y,r.z,B.AIR); }
+  plc(r,id) {
+    if (r&&r.hit) {
+      const {px,py,pz}=r;
+      if (this.w.gb(px,py,pz)===B.AIR) {
+        const dd=Math.sqrt((px+0.5-this.cam.position.x)**2+(py+0.5-this.cam.position.y)**2+(pz+0.5-this.cam.position.z)**2);
+        if (dd<this.reach) this.w.sb(px,py,pz,id);
+      }
+    }
+  }
+}
+
+// ===================== 游戏主控 =====================
+class Game {
+  constructor() {
+    var dc = document.getElementById('debug');
+    dc.textContent = '初始化渲染器...';
+    this.r=new THREE.WebGLRenderer({antialias:true});
+    this.r.setSize(innerWidth,innerHeight);
+    this.r.setPixelRatio(Math.min(devicePixelRatio,2));
+    document.body.prepend(this.r.domElement);
+    this.cam=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,200);
+    addEventListener('resize',()=>{ this.cam.aspect=innerWidth/innerHeight; this.cam.updateProjectionMatrix(); this.r.setSize(innerWidth,innerHeight); });
+
+    dc.textContent = '生成纹理...';
+    var tex;
+    try { tex=genTex(); } catch(e) { dc.textContent='纹理生成失败: '+e.message; throw e; }
+
+    dc.textContent = '创建世界...';
+    try { this.w=new World(tex); } catch(e) { dc.textContent='世界创建失败: '+e.message; throw e; }
+
+    dc.textContent = '创建玩家...';
+    this.p=new Player(this.cam);
+    this.ia=new Interact(this.w,this.cam);
+
+    this.hotbarEl=document.getElementById('hotbar');
+    this.blocker=document.getElementById('blocker');
+    this.debugEl=document.getElementById('debug');
+    this.selSlot=0; this.keys={}; this.playing=false;
+    this.lastT=performance.now(); this.frames=0; this.fpsT=0; this.fps=0;
+
+    dc.textContent = '构建热栏...';
+    try { this._buildHotbar(); } catch(e) { console.error('热栏失败:',e); }
+
+    dc.textContent = '绑定控制...';
+    this._bind();
+
+    dc.textContent = '启动循环...';
+    this._loop();
+  }
+
+  _buildHotbar() {
+    this.hotbarEl.innerHTML='';
+    for (let i=0; i<HB.length; i++) {
+      var s=document.createElement('div');
+      s.className='slot'+(i===0?' active':'');
+      var h=document.createElement('span'); h.className='key-hint'; h.textContent=i+1; s.appendChild(h);
+      var def=BF[HB[i]], tn=def.all||def.top||def.side;
+      var cv=document.createElement('canvas'); cv.width=16; cv.height=16;
+      cv.style.cssText='width:32px;height:32px;image-rendering:pixelated;';
+      try {
+        var tex=this.w.tex[tn];
+        if (tex) cv.getContext('2d').drawImage(tex.image,0,0,16,16);
+      } catch(e) { /* 热栏图标略过 */ }
+      s.appendChild(cv);
+      s.addEventListener('click',()=>this._pick(i));
+      this.hotbarEl.appendChild(s);
+    }
+  }
+
+  _pick(i) { this.selSlot=i; this.hotbarEl.querySelectorAll('.slot').forEach((s,j)=>s.classList.toggle('active',j===i)); }
+
+  _bind() {
+    addEventListener('keydown',e=>{
+      this.keys[e.code]=true;
+      const n=parseInt(e.key);
+      if (n>=1&&n<=HB.length) this._pick(n-1);
+    });
+    addEventListener('keyup',e=>{ this.keys[e.code]=false; });
+    this.blocker.addEventListener('click',()=>this.r.domElement.requestPointerLock());
+    addEventListener('pointerlockchange',()=>{
+      this.playing=document.pointerLockElement===this.r.domElement;
+      this.blocker.style.display=this.playing?'none':'flex';
+    });
+    addEventListener('mousemove',e=>{
+      if (!this.playing) return;
+      this.p.yaw-=e.movementX*0.002; this.p.pitch-=e.movementY*0.002;
+      this.p.pitch=clamp(this.p.pitch,-Math.PI/2+0.01,Math.PI/2-0.01);
+    });
+    addEventListener('mousedown',e=>{
+      if (!this.playing) return;
+      const r=this.ia.cast();
+      if (e.button===0) this.ia.brk(r); else if (e.button===2) this.ia.plc(r,HB[this.selSlot]);
+    });
+    addEventListener('contextmenu',e=>e.preventDefault());
+    addEventListener('wheel',e=>{
+      if (!this.playing) return;
+      let ns=this.selSlot+(e.deltaY>0?1:-1);
+      if (ns<0) ns=HB.length-1; if (ns>=HB.length) ns=0;
+      this._pick(ns);
+    });
+  }
+
+  _loop() {
+    requestAnimationFrame(()=>this._loop());
+    try {
+      var now=performance.now();
+      var dt=Math.min((now-this.lastT)/1000,0.05);
+      this.lastT=now; this.frames++; this.fpsT+=dt;
+      if (this.fpsT>=1) { this.fps=this.frames; this.frames=0; this.fpsT=0; }
+
+      if (this.playing) {
+        this.p.tick(dt,this.w,this.keys);
+        this.w.setView(Math.floor(this.p.pos.x/CS), Math.floor(this.p.pos.z/CS));
+        this.w.updateLoading();
+        this.ia.cast();
+      }
+      this.r.render(this.w.scene,this.cam);
+
+      var foot=this.w.gb(Math.floor(this.p.pos.x),Math.floor(this.p.pos.y),Math.floor(this.p.pos.z));
+      this.debugEl.innerHTML='FPS: '+this.fps+' | '+this.p.pos.x.toFixed(1)+', '+this.p.pos.y.toFixed(1)+', '+this.p.pos.z.toFixed(1)+' | '+ (BN[foot]||'?')+'<br>WASD移动 空格跳跃 左键破坏 右键放置';
+    } catch(e) { console.error('循环错误:',e); this.debugEl.textContent='错误: '+e.message; }
+  }
+}
+
+// 独立点击 + 指针锁定处理器（不依赖 Game 类）
+(function(){
+  var blocker = document.getElementById('blocker');
+  blocker.addEventListener('click', function(){
+    var el = document.querySelector('canvas');
+    if (el) el.requestPointerLock();
+  });
+  document.addEventListener('pointerlockchange', function(){
+    if (document.pointerLockElement) blocker.style.display='none';
+    else blocker.style.display='flex';
+  });
+})();
+
+function boot() {
+  try { new Game(); }
+  catch(e) { console.error('启动失败:', e); document.getElementById('debug').textContent='错误: '+e.message; }
+}
+if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
+</script>
+</body>
+</html>
