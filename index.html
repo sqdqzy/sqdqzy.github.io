@@ -252,7 +252,7 @@
 
     <!-- 首屏 -->
     <section class="hero">
-      <div class="avatar">🧜</div>
+      <div class="avatar" style="background-image: url('https://avatars.githubusercontent.com/u/295380872'); background-size: cover; background-position: center;"></div>
       <h1>你好，我是神奇的乔治亚</h1>
       <p class="tagline">
         <span id="typewriter"></span><span class="cursor"></span>
@@ -322,48 +322,126 @@
       applyTheme(now === "dark" ? "light" : "dark");
     });
 
-    // ===== 项目数据：以后新增项目，直接在这里加一条即可 =====
-    const projects = [
-      {
-        icon: "🖥️",
-        title: "dsh-desktop",
-        desc: "DeepSeek IDE 的无边框桌面启动器，自动管理 DSH 服务的启动与清理。",
-        link: "https://github.com/sqdqzy/dsh-desktop"
-      },
-      {
-        icon: "🧠",
-        title: "operit-multi-agent-skills",
-        desc: "Operit 多 Agent 并发 Skills，教 AI 通过 OpenCode 并发出子 Agent 执行任务。",
-        link: "https://github.com/sqdqzy/operit-multi-agent-skills"
-      },
-      {
-        icon: "📘",
-        title: "迷你世界3.0开发文档",
-        desc: "官方游戏引擎开发指南，涵盖 API、模块架构与扩展规范。",
-        link: "https://gitee.com/sqdqzy/miniworld-3.0-document"
+    // ===== 动态加载 GitHub 和 Gitee 仓库 =====
+    async function fetchGitHubRepos(username) {
+      try {
+        const response = await fetch(`https://api.github.com/users/${username}/repos`);
+        if (!response.ok) throw new Error('GitHub API 请求失败');
+        const repos = await response.json();
+        return repos.map(repo => ({
+          name: repo.name,
+          description: repo.description || '暂无描述',
+          url: repo.html_url,
+          platform: 'github'
+        }));
+      } catch (error) {
+        console.error('获取 GitHub 仓库失败:', error);
+        return [];
       }
-    ];
+    }
 
-    const grid = document.getElementById("projectGrid");
-    grid.innerHTML = projects.map(p => `
-      <article class="card">
-        <div class="card-icon">${p.icon}</div>
-        <h3>${p.title}</h3>
-        <p>${p.desc}</p>
-        <a class="card-link" href="${p.link}" target="_blank" rel="noopener">立即使用 →</a>
-      </article>
-    `).join("");
+    async function fetchGiteeRepos(username) {
+      try {
+        const response = await fetch(`https://gitee.com/api/v5/users/${username}/repos`);
+        if (!response.ok) throw new Error('Gitee API 请求失败');
+        const repos = await response.json();
+        return repos.map(repo => ({
+          name: repo.name,
+          description: repo.description || '暂无描述',
+          url: repo.html_url,
+          platform: 'gitee'
+        }));
+      } catch (error) {
+        console.error('获取 Gitee 仓库失败:', error);
+        return [];
+      }
+    }
 
-    // ===== 卡片滚动入场动画 =====
-    const observer = new IntersectionObserver(entries => {
-      entries.forEach((entry, i) => {
-        if (entry.isIntersecting) {
-          setTimeout(() => entry.target.classList.add("visible"), i * 120);
-          observer.unobserve(entry.target);
+    async function loadProjects() {
+      const username = 'sqdqzy';
+      const [githubRepos, giteeRepos] = await Promise.all([
+        fetchGitHubRepos(username),
+        fetchGiteeRepos(username)
+      ]);
+      
+      const repoMap = new Map();
+      githubRepos.forEach(repo => {
+        repoMap.set(repo.name, {
+          title: repo.name,
+          desc: repo.description,
+          github: repo.url,
+          gitee: null,
+          icon: '📦'
+        });
+      });
+      
+      giteeRepos.forEach(repo => {
+        if (repoMap.has(repo.name)) {
+          repoMap.get(repo.name).gitee = repo.url;
+        } else {
+          repoMap.set(repo.name, {
+            title: repo.name,
+            desc: repo.description,
+            github: null,
+            gitee: repo.url,
+            icon: '📦'
+          });
         }
       });
-    }, { threshold: 0.15 });
-    document.querySelectorAll(".card").forEach(card => observer.observe(card));
+      
+      return Array.from(repoMap.values());
+    }
+
+    function initScrollAnimation() {
+      const observer = new IntersectionObserver(entries => {
+        entries.forEach((entry, i) => {
+          if (entry.isIntersecting) {
+            setTimeout(() => entry.target.classList.add("visible"), i * 120);
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.15 });
+      document.querySelectorAll(".card").forEach(card => observer.observe(card));
+    }
+
+    async function renderProjects() {
+      const grid = document.getElementById("projectGrid");
+      grid.innerHTML = '<p>正在加载项目列表...</p>';
+      
+      try {
+        const projects = await loadProjects();
+        if (projects.length === 0) {
+          grid.innerHTML = '<p>暂无项目或加载失败</p>';
+          return;
+        }
+        
+        grid.innerHTML = projects.map(p => {
+          let links = '';
+          if (p.github) {
+            links += `<a class="card-link" href="${p.github}" target="_blank" rel="noopener">GitHub</a>`;
+          }
+          if (p.gitee) {
+            links += `<a class="card-link" href="${p.gitee}" target="_blank" rel="noopener">Gitee</a>`;
+          }
+          return `
+            <article class="card">
+              <div class="card-icon">${p.icon}</div>
+              <h3>${p.title}</h3>
+              <p>${p.desc}</p>
+              <div class="card-links" style="display: flex; gap: 12px; margin-top: 12px;">
+                ${links}
+              </div>
+            </article>
+          `;
+        }).join("");
+        
+        initScrollAnimation();
+      } catch (error) {
+        grid.innerHTML = '<p>项目加载失败，请刷新重试</p>';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', renderProjects);
   </script>
 </body>
 </html>
