@@ -616,6 +616,7 @@ class Game {
 
     dc.textContent = '启动循环...';
     this._loop();
+    window.__MC_DEBUG__ = this;   // 调试/自动化测试句柄
   }
 
   _buildHotbar() {
