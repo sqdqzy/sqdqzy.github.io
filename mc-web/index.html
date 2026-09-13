@@ -225,14 +225,27 @@ function genTex() {
     for (let i = 0; i < 10; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#e4c87a');
     hl(ctx, 0, 5, s, '#c4a85a'); hl(ctx, 0, 11, s, '#e4c87a');
   });
+  mk('snow', (ctx, s) => {
+    fl(ctx, s, '#f2f6fb');
+    for (let i = 0; i < 12; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#dfe8f2');
+    for (let i = 0; i < 6; i++) px(ctx, (Math.random()*s)|0, (Math.random()*s)|0, '#ffffff');
+    hl(ctx, 0, 5, s, '#e8eff7'); hl(ctx, 0, 11, s, '#e8eff7');
+  });
+  mk('snow_side', (ctx, s) => {
+    fl(ctx, s, '#8b6b3a');
+    for (let y = 0; y < 5; y++) for (let x = 0; x < s; x++) px(ctx, x, y, '#f2f6fb');
+    for (let x = 0; x < s; x++) if (Math.random() > 0.4) px(ctx, x, 5, '#e4ecf5');
+    for (let i = 0; i < 14; i++) px(ctx, (Math.random()*s)|0, 6+(Math.random()*10)|0, '#7a5b2a');
+    hl(ctx, 0, 10, s, '#7a5b2a');
+  });
   return T;
 }
 
 // ===================== 方块 =====================
-const B = { AIR:0, GRASS:1, DIRT:2, STONE:3, COBBLESTONE:4, OAK_LOG:5, OAK_PLANKS:6, OAK_LEAVES:7, BEDROCK:8, SAND:9 };
+const B = { AIR:0, GRASS:1, DIRT:2, STONE:3, COBBLESTONE:4, OAK_LOG:5, OAK_PLANKS:6, OAK_LEAVES:7, BEDROCK:8, SAND:9, SNOW:10 };
 const BN = {}; BN[B.AIR]='空气'; BN[B.GRASS]='草方块'; BN[B.DIRT]='泥土'; BN[B.STONE]='石头';
 BN[B.COBBLESTONE]='圆石'; BN[B.OAK_LOG]='橡木原木'; BN[B.OAK_PLANKS]='橡木木板';
-BN[B.OAK_LEAVES]='树叶'; BN[B.BEDROCK]='基岩'; BN[B.SAND]='沙子';
+BN[B.OAK_LEAVES]='树叶'; BN[B.BEDROCK]='基岩'; BN[B.SAND]='沙子'; BN[B.SNOW]='雪块';
 
 const BF = {
   [B.GRASS]:{top:'grass_top',bottom:'dirt',side:'grass_side'}, [B.DIRT]:{all:'dirt'},
@@ -240,6 +253,7 @@ const BF = {
   [B.OAK_LOG]:{top:'oak_log_top',bottom:'oak_log_top',side:'oak_log_side'},
   [B.OAK_PLANKS]:{all:'oak_planks'}, [B.OAK_LEAVES]:{all:'oak_leaves'},
   [B.BEDROCK]:{all:'bedrock'}, [B.SAND]:{all:'sand'},
+  [B.SNOW]:{top:'snow',bottom:'dirt',side:'snow_side'},
 };
 const BT = { [B.AIR]:true, [B.OAK_LEAVES]:true };
 function isT(id) { return BT[id]||false; }
@@ -252,12 +266,40 @@ function h2(x, y) {
   h = ((h^(h>>13))*1274126177)|0;
   return ((h^(h>>16))&0x7fffffff)/0x7fffffff;
 }
+function h3(x, y, z) {
+  let h = x*374761393 + y*668265263 + z*1440662683;
+  h = ((h^(h>>13))*1274126177)|0;
+  return ((h^(h>>16))&0x7fffffff)/0x7fffffff;
+}
 function sn(x, y, f) {
   const fx=x*f, fy=y*f; const ix=fx|0, iy=fy|0;
   const dx=fx-ix, dy=fy-iy, sx=dx*dx*(3-2*dx), sy=dy*dy*(3-2*dy);
   return h2(ix,iy)*(1-sx)*(1-sy) + h2(ix+1,iy)*sx*(1-sy) + h2(ix,iy+1)*(1-sx)*sy + h2(ix+1,iy+1)*sx*sy;
 }
-function th(wx, wz) { return (sn(wx,wz,0.02)*12 + sn(wx,wz,0.05)*4 + sn(wx,wz,0.01)*8 + 6)|0; }
+// 3D 值噪声（三线性插值），用于洞穴
+function sn3(x, y, z, f) {
+  const fx=x*f, fy=y*f, fz=z*f;
+  const ix=fx|0, iy=fy|0, iz=fz|0;
+  const dx=fx-ix, dy=fy-iy, dz=fz-iz;
+  const sx=dx*dx*(3-2*dx), sy=dy*dy*(3-2*dy), sz=dz*dz*(3-2*dz);
+  const l=(a,b,t)=>a+(b-a)*t;
+  const c00=l(h3(ix,iy,iz),   h3(ix+1,iy,iz),   sx);
+  const c10=l(h3(ix,iy+1,iz), h3(ix+1,iy+1,iz), sx);
+  const c01=l(h3(ix,iy,iz+1), h3(ix+1,iy,iz+1), sx);
+  const c11=l(h3(ix,iy+1,iz+1), h3(ix+1,iy+1,iz+1), sx);
+  return l(l(c00,c10,sy), l(c01,c11,sy), sz);
+}
+
+// ===================== 地形生成 =====================
+// 表层分区：低洼沙地 / 草地丘陵 / 高山裸岩 / 雪线以上积雪
+const SEA_H = 9, ROCK_H = 24, SNOW_H = 30;
+
+function th(wx, wz) {
+  const hills = sn(wx,wz,0.013)*8 + sn(wx,wz,0.032)*4 + sn(wx,wz,0.07)*2 + sn(wx,wz,0.16)*1;
+  const m = sn(wx,wz,0.006);
+  const mountain = Math.max(0, m-0.58)/0.42;   // 少数区域隆起成山脉
+  return clamp((6 + hills + mountain*mountain*24)|0, 4, CH-12);
+}
 
 // ===================== 世界 =====================
 const CS=16, CH=64;
@@ -324,19 +366,27 @@ class World {
     const key = this.ck(cx, cz);
     const d = new Uint8Array(CS*CH*CS);
     this.chunks.set(key, d);
+    const grassTops = [];
     for (let lx=0; lx<CS; lx++) for (let lz=0; lz<CS; lz++) {
       const wx=cx*CS+lx, wz=cz*CS+lz, h=th(wx,wz);
-      for (let wy=0; wy<CH; wy++) {
-        let b = B.AIR;
+      // 自下而上逐层连续填充：基岩 → 石头 → 3 层表土 → 表层，任何一层都不会悬空
+      for (let wy=0; wy<=h; wy++) {
+        let b;
         if (wy===0) b=B.BEDROCK;
         else if (wy<h-3) b=B.STONE;
-        else if (wy<h-1) b=B.DIRT;
-        else if (wy===h) b=B.GRASS;
-        d[(wy*CS+lz)*CS+lx] = b;
+        else if (wy<h) b=(h<=SEA_H)?B.SAND:B.DIRT;
+        else b=(h<=SEA_H)?B.SAND:(h>=SNOW_H)?B.SNOW:(h>=ROCK_H)?B.STONE:B.GRASS;
+        // 洞穴：只挖表层以下的石层，地表始终封口
+        if (b!==B.BEDROCK && wy>=3 && wy<h-3 && sn3(wx,wy,wz,0.09)>0.72) b=B.AIR;
+        d[(wy*CS+lz)*CS+lx]=b;
       }
-      if (d[(h*CS+lz)*CS+lx]===B.GRASS && Math.random()<0.006) this._tree(wx, h+1, wz);
+      if (d[(h*CS+lz)*CS+lx]===B.GRASS) grassTops.push([lx, lz, wx, h, wz]);
     }
     this.dirty.add(key);
+    // 树：树冠半径 2，树干限制在区块内缘生成，避免跨区块写入被邻居区块的重新生成覆盖
+    for (const [lx, lz, wx, h, wz] of grassTops) {
+      if (lx>=2 && lx<CS-2 && lz>=2 && lz<CS-2 && Math.random()<0.008) this._tree(wx, h+1, wz);
+    }
   }
 
   _tree(wx, wy, wz) {
@@ -647,14 +697,22 @@ class Game {
       if (n>=1&&n<=HB.length) this._pick(n-1);
     });
     addEventListener('keyup',e=>{ this.keys[e.code]=false; });
+    // 全游戏唯一的鼠标锁定入口：点击"开始游戏"之后才请求锁定
     this.blocker.addEventListener('click',()=>{
-      if (IS_TOUCH) { this._startTouch(); return; }   // 触屏无指针锁定，直接进入
-      this.r.domElement.requestPointerLock();
+      if (IS_TOUCH) { this._startTouch(); return; }
+      const p = this.r.domElement.requestPointerLock();
+      if (p && p.catch) p.catch(()=>{ /* 失败走 pointerlockerror 提示 */ });
     });
     addEventListener('pointerlockchange',()=>{
       if (IS_TOUCH) return;
-      this.playing=document.pointerLockElement===this.r.domElement;
-      this.blocker.style.display=this.playing?'none':'flex';
+      this.playing = document.pointerLockElement===this.r.domElement;
+      this.blocker.style.display = this.playing ? 'none' : 'flex';
+      if (!this.playing) this.blocker.querySelector('.click-msg').textContent = '点击开始游戏';
+    });
+    addEventListener('pointerlockerror',()=>{
+      if (IS_TOUCH) return;
+      // 按 Esc 退出后浏览器有约 1 秒冷却期，期间请求会被拒绝
+      this.blocker.querySelector('.click-msg').textContent = '浏览器暂时拒绝了鼠标锁定，请稍等一下再点';
     });
     addEventListener('mousemove',e=>{
       if (!this.playing) return;
@@ -772,20 +830,6 @@ class Game {
     } catch(e) { console.error('循环错误:',e); this.debugEl.textContent='错误: '+e.message; }
   }
 }
-
-// 独立点击 + 指针锁定处理器（不依赖 Game 类；触屏设备由 Game 内部处理，无指针锁定）
-(function(){
-  if (('ontouchstart' in window) || navigator.maxTouchPoints > 0) return;
-  var blocker = document.getElementById('blocker');
-  blocker.addEventListener('click', function(){
-    var el = document.querySelector('canvas');
-    if (el) el.requestPointerLock();
-  });
-  document.addEventListener('pointerlockchange', function(){
-    if (document.pointerLockElement) blocker.style.display='none';
-    else blocker.style.display='flex';
-  });
-})();
 
 function boot() {
   try { new Game(); }
