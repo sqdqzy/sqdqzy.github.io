@@ -136,8 +136,9 @@ body.touch #act-btns { display: flex; }
 <script>
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
-// 触屏设备检测
-const IS_TOUCH = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+// 触屏设备检测：按"主输入是否为 coarse（手指）"判断。
+// 触屏笔记本/一体机的主输入仍是鼠标（pointer: fine），必须走键鼠 + 指针锁定，否则无法吸附鼠标。
+const IS_TOUCH = window.matchMedia('(pointer: coarse)').matches;
 
 // ===================== 纹理生成 =====================
 function genTex() {
@@ -147,6 +148,7 @@ function genTex() {
     fn(c.getContext('2d'), S);
     const t = new THREE.CanvasTexture(c);
     t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
+    t.flipY = false;   // 侧面 UV 约定 v=0 在方块顶部；关闭翻转后 v=0 对应画布顶部，贴图才不会上下颠倒
     T[n] = t;
   }
   function fl(ctx, s, c) { ctx.fillStyle = c; ctx.fillRect(0, 0, s, s); }
@@ -282,9 +284,10 @@ class World {
     this.viewDist = 4;
 
     // 面定义: dir, normal, vertices[x,y,z], uvFn(v=>[u,v])
+    // 顶点顺序决定正反面：顶/底两面若绕反会被背面剔除（从上看直接穿透地面 = 透视）
     this.faces = [
-      { d:[0,1,0], n:[0,1,0], v:[[0,1,0],[1,1,0],[1,1,1],[0,1,1]], uv:v=>[v[0],1-v[2]] },
-      { d:[0,-1,0], n:[0,-1,0], v:[[1,0,0],[0,0,0],[0,0,1],[1,0,1]], uv:v=>[v[0],1-v[2]] },
+      { d:[0,1,0], n:[0,1,0], v:[[0,1,1],[1,1,1],[1,1,0],[0,1,0]], uv:v=>[v[0],1-v[2]] },
+      { d:[0,-1,0], n:[0,-1,0], v:[[1,0,1],[0,0,1],[0,0,0],[1,0,0]], uv:v=>[v[0],1-v[2]] },
       { d:[0,0,1], n:[0,0,1], v:[[0,0,1],[1,0,1],[1,1,1],[0,1,1]], uv:v=>[v[0],1-v[1]] },
       { d:[0,0,-1], n:[0,0,-1], v:[[1,0,0],[0,0,0],[0,1,0],[1,1,0]], uv:v=>[v[0],1-v[1]] },
       { d:[-1,0,0], n:[-1,0,0], v:[[0,0,1],[0,1,1],[0,1,0],[0,0,0]], uv:v=>[v[2],1-v[1]] },
@@ -428,7 +431,7 @@ class World {
   _dispose(mesh) {
     mesh.geometry.dispose();
     const ms = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    ms.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
+    ms.forEach(m => m.dispose());   // 贴图是全局共享的，不能随区块释放，否则其余区块要反复重传贴图
   }
 
   removeChunk(key) {
