@@ -617,8 +617,8 @@ class Player {
 
 // ===================== 交互 =====================
 class Interact {
-  constructor(w, cam) {
-    this.w=w; this.cam=cam; this.reach=7;
+  constructor(w, cam, p) {
+    this.w=w; this.cam=cam; this.p=p; this.reach=7;
     const g=new THREE.BoxGeometry(1.005,1.005,1.005);
     const m=new THREE.MeshBasicMaterial({color:0xffffff,wireframe:true,transparent:true,opacity:0.3,depthTest:true});
     this.hl=new THREE.Mesh(g,m); this.hl.visible=false; this.w.scene.add(this.hl);
@@ -664,7 +664,12 @@ class Interact {
       const {px,py,pz}=r;
       if (this.w.gb(px,py,pz)===B.AIR) {
         const dd=Math.sqrt((px+0.5-this.cam.position.x)**2+(py+0.5-this.cam.position.y)**2+(pz+0.5-this.cam.position.z)**2);
-        if (dd<this.reach) this.w.sb(px,py,pz,id);
+        if (dd<this.reach) {
+          // 与玩家身体重叠的格子禁止放置，否则会被自己脚下的方块卡死
+          const a=this.p.abb(this.p.pos.x,this.p.pos.y,this.p.pos.z);
+          const overlap = px+1>a.min[0] && px<a.max[0] && py+1>a.min[1] && py<a.max[1] && pz+1>a.min[2] && pz<a.max[2];
+          if (!overlap) this.w.sb(px,py,pz,id);
+        }
       }
     }
   }
@@ -691,7 +696,7 @@ class Game {
 
     dc.textContent = '创建玩家...';
     this.p=new Player(this.cam);
-    this.ia=new Interact(this.w,this.cam);
+    this.ia=new Interact(this.w,this.cam,this.p);
 
     this.hotbarEl=document.getElementById('hotbar');
     this.blocker=document.getElementById('blocker');
