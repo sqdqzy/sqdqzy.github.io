@@ -603,12 +603,16 @@ class Interact {
     const sx=d.x>0?1:-1, sy=d.y>0?1:-1, sz=d.z>0?1:-1;
     const tdx=Math.abs(1/d.x), tdy=Math.abs(1/d.y), tdz=Math.abs(1/d.z);
     const inf=Infinity;
-    let tmx=d.x!==0?((d.x>0?(x+1-o.x):(o.x-x))/d.x):inf;
-    let tmy=d.y!==0?((d.y>0?(y+1-o.y):(o.y-y))/d.y):inf;
-    let tmz=d.z!==0?((d.z>0?(z+1-o.z):(o.z-z))/d.z):inf;
-    let lx=x, ly=y, lz=z, face=0;
+    // 负方向分量的 tMax 必须是 (floor-o)/d（负/负=正）；写成 (o.x-x)/d.x 会得到
+    // 负值，导致射线在负方向轴上提前跳步、命中体素偏离准心。
+    let tmx=d.x!==0?((d.x>0?(x+1-o.x):(x-o.x))/d.x):inf;
+    let tmy=d.y!==0?((d.y>0?(y+1-o.y):(y-o.y))/d.y):inf;
+    let tmz=d.z!==0?((d.z>0?(z+1-o.z):(z-o.z))/d.z):inf;
+    let lx=x, ly=y, lz=z, face=0, t=0;
 
-    for (let i=0; i<this.reach*3; i++) {
+    // 步进上限用射线距离 t≤reach（步数上限无法限制距离，沿轴方向会挖到 20+ 格远）
+    for (let i=0; i<100; i++) {
+      if (t>this.reach) break;
       const b=this.w.gb(x,y,z);
       if (b!==B.AIR) {
         this.hl.position.set(x+0.5,y+0.5,z+0.5); this.hl.visible=true;
@@ -616,11 +620,11 @@ class Interact {
       }
       lx=x; ly=y; lz=z;
       if (tmx<tmy) {
-        if (tmx<tmz) { x+=sx; tmx+=tdx; face=sx>0?4:5; }
-        else { z+=sz; tmz+=tdz; face=sz>0?2:3; }
+        if (tmx<tmz) { x+=sx; t=tmx; tmx+=tdx; face=sx>0?4:5; }
+        else { z+=sz; t=tmz; tmz+=tdz; face=sz>0?2:3; }
       } else {
-        if (tmy<tmz) { y+=sy; tmy+=tdy; face=sy>0?1:0; }
-        else { z+=sz; tmz+=tdz; face=sz>0?2:3; }
+        if (tmy<tmz) { y+=sy; t=tmy; tmy+=tdy; face=sy>0?1:0; }
+        else { z+=sz; t=tmz; tmz+=tdz; face=sz>0?2:3; }
       }
       if (y<0||y>=CH) break;
     }
