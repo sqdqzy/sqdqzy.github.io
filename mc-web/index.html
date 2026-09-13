@@ -2,11 +2,12 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>MC Web</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
+html, body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
 canvas { display: block; }
 #blocker {
   position: fixed; inset: 0; z-index: 100;
@@ -71,6 +72,43 @@ canvas { display: block; }
   color: rgba(255,255,255,0.6); font-size: 10px;
   font-family: 'Consolas', monospace;
 }
+
+/* ===== 触屏控件（仅触屏设备显示）===== */
+#joy {
+  position: fixed; left: 22px; bottom: 130px; z-index: 55;
+  width: 122px; height: 122px; border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: 2px solid rgba(255,255,255,0.25);
+  display: none; touch-action: none;
+}
+#joy .knob {
+  position: absolute; left: 50%; top: 50%; width: 52px; height: 52px;
+  border-radius: 50%; background: rgba(255,255,255,0.35);
+  transform: translate(-50%,-50%);
+}
+#act-btns {
+  position: fixed; right: 18px; bottom: 130px; z-index: 55;
+  display: none; flex-direction: column; gap: 14px; touch-action: none;
+}
+#act-btns .abtn {
+  width: 62px; height: 62px; border-radius: 50%;
+  background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.3);
+  color: #fff; font-size: 14px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+  touch-action: none;
+}
+#act-btns .abtn:active { background: rgba(255,255,255,0.32); }
+body.touch #joy { display: block; }
+body.touch #act-btns { display: flex; }
+
+@media (max-width: 600px) {
+  #hotbar { bottom: 10px; }
+  #hotbar .slot { width: 44px; height: 44px; }
+  #hotbar .slot canvas { width: 26px; height: 26px; }
+  #debug { font-size: 11px; padding: 6px 8px; }
+  #blocker .title { font-size: 34px; }
+  #blocker .click-msg { font-size: 19px; padding: 10px 24px; }
+}
 </style>
 </head>
 <body>
@@ -87,10 +125,19 @@ canvas { display: block; }
 <div id="debug">加载中...</div>
 <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
 <div id="hotbar"></div>
+<div id="joy"><div class="knob"></div></div>
+<div id="act-btns">
+  <div class="abtn" id="btn-jump">跳</div>
+  <div class="abtn" id="btn-break">挖</div>
+  <div class="abtn" id="btn-place">放</div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+// 触屏设备检测
+const IS_TOUCH = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
 // ===================== 纹理生成 =====================
 function genTex() {
@@ -454,13 +501,15 @@ class Player {
         }
     return false;
   }
-  tick(dt, w, keys) {
+  tick(dt, w, keys, joy) {
     const f=new THREE.Vector3(-Math.sin(this.yaw),0,-Math.cos(this.yaw));
     const r=new THREE.Vector3(Math.cos(this.yaw),0,-Math.sin(this.yaw));
     const m=new THREE.Vector3();
     if (keys['KeyW']||keys['w']) m.add(f); if (keys['KeyS']||keys['s']) m.sub(f);
     if (keys['KeyA']||keys['a']) m.sub(r); if (keys['KeyD']||keys['d']) m.add(r);
-    if (m.lengthSq()>0) m.normalize().multiplyScalar(this.spd);
+    if (joy && (joy.f || joy.s)) m.addScaledVector(f, joy.f).addScaledVector(r, joy.s);
+    if (m.lengthSq()>1) m.normalize();
+    if (m.lengthSq()>0) m.multiplyScalar(this.spd);
     if ((keys['Space']||keys['KeyK'])&&this.ground) { this.vel.y=this.jmp; this.ground=false; }
     this.vel.y+=this.grv*dt; if (this.vel.y<-30) this.vel.y=-30;
     this.vel.x=m.x; this.vel.z=m.z;
@@ -551,7 +600,9 @@ class Game {
     this.hotbarEl=document.getElementById('hotbar');
     this.blocker=document.getElementById('blocker');
     this.debugEl=document.getElementById('debug');
-    this.selSlot=0; this.keys={}; this.playing=false;
+    this.selSlot=0; this.keys={}; this.joy={f:0,s:0}; this.playing=false;
+
+    if (IS_TOUCH) { document.body.classList.add('touch'); this.w.viewDist=3; }
     this.lastT=performance.now(); this.frames=0; this.fpsT=0; this.fps=0;
 
     dc.textContent = '构建热栏...';
@@ -592,8 +643,12 @@ class Game {
       if (n>=1&&n<=HB.length) this._pick(n-1);
     });
     addEventListener('keyup',e=>{ this.keys[e.code]=false; });
-    this.blocker.addEventListener('click',()=>this.r.domElement.requestPointerLock());
+    this.blocker.addEventListener('click',()=>{
+      if (IS_TOUCH) { this._startTouch(); return; }   // 触屏无指针锁定，直接进入
+      this.r.domElement.requestPointerLock();
+    });
     addEventListener('pointerlockchange',()=>{
+      if (IS_TOUCH) return;
       this.playing=document.pointerLockElement===this.r.domElement;
       this.blocker.style.display=this.playing?'none':'flex';
     });
@@ -614,6 +669,80 @@ class Game {
       if (ns<0) ns=HB.length-1; if (ns>=HB.length) ns=0;
       this._pick(ns);
     });
+    if (IS_TOUCH) this._bindTouch();
+  }
+
+  _startTouch() { this.playing=true; this.blocker.style.display='none'; }
+
+  _bindTouch() {
+    // ---- 左下虚拟摇杆：移动 ----
+    const joyEl=document.getElementById('joy'), knob=joyEl.querySelector('.knob');
+    let joyId=null;
+    const setKnob=(dx,dy)=>{ knob.style.transform=`translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`; };
+    joyEl.addEventListener('touchstart',e=>{
+      e.preventDefault();
+      if (joyId===null) joyId=e.changedTouches[0].identifier;
+    },{passive:false});
+    joyEl.addEventListener('touchmove',e=>{
+      e.preventDefault();
+      const rc=joyEl.getBoundingClientRect();
+      const cx=rc.left+rc.width/2, cy=rc.top+rc.height/2, max=rc.width/2-8;
+      for (const t of e.changedTouches) {
+        if (t.identifier!==joyId) continue;
+        let dx=t.clientX-cx, dy=t.clientY-cy;
+        const len=Math.hypot(dx,dy);
+        if (len>max) { dx=dx/len*max; dy=dy/len*max; }
+        setKnob(dx,dy);
+        this.joy.f=clamp(-dy/max,-1,1);   // 上推 = 前进
+        this.joy.s=clamp(dx/max,-1,1);    // 右推 = 右移
+      }
+    },{passive:false});
+    const joyEnd=e=>{
+      for (const t of e.changedTouches) {
+        if (t.identifier!==joyId) continue;
+        joyId=null; this.joy.f=0; this.joy.s=0; setKnob(0,0);
+      }
+    };
+    joyEl.addEventListener('touchend',joyEnd);
+    joyEl.addEventListener('touchcancel',joyEnd);
+
+    // ---- 右下按钮：跳跃 / 挖掘 / 放置 ----
+    const bj=document.getElementById('btn-jump');
+    bj.addEventListener('touchstart',e=>{ e.preventDefault(); this.keys['Space']=true; },{passive:false});
+    const bjEnd=e=>{ e.preventDefault(); this.keys['Space']=false; };
+    bj.addEventListener('touchend',bjEnd,{passive:false});
+    bj.addEventListener('touchcancel',bjEnd,{passive:false});
+    document.getElementById('btn-break').addEventListener('touchstart',e=>{
+      e.preventDefault(); if (this.playing) this.ia.brk(this.ia.cast());
+    },{passive:false});
+    document.getElementById('btn-place').addEventListener('touchstart',e=>{
+      e.preventDefault(); if (this.playing) this.ia.plc(this.ia.cast(),HB[this.selSlot]);
+    },{passive:false});
+
+    // ---- 其余屏幕区域拖动 = 转视角 ----
+    let lookId=null, lx=0, ly=0;
+    const isCtrl=el=>el && el.closest && (el.closest('#joy')||el.closest('#act-btns')||el.closest('#hotbar'));
+    document.addEventListener('touchstart',e=>{
+      if (!this.playing) return;
+      for (const t of e.changedTouches) {
+        if (lookId!==null) break;
+        if (isCtrl(t.target)) continue;
+        lookId=t.identifier; lx=t.clientX; ly=t.clientY;
+      }
+    },{passive:true});
+    document.addEventListener('touchmove',e=>{
+      for (const t of e.changedTouches) {
+        if (t.identifier!==lookId) continue;
+        e.preventDefault();
+        this.p.yaw-=(t.clientX-lx)*0.006;
+        this.p.pitch-=(t.clientY-ly)*0.006;
+        this.p.pitch=clamp(this.p.pitch,-Math.PI/2+0.01,Math.PI/2-0.01);
+        lx=t.clientX; ly=t.clientY;
+      }
+    },{passive:false});
+    const lookEnd=e=>{ for (const t of e.changedTouches) if (t.identifier===lookId) lookId=null; };
+    document.addEventListener('touchend',lookEnd);
+    document.addEventListener('touchcancel',lookEnd);
   }
 
   _loop() {
@@ -625,7 +754,7 @@ class Game {
       if (this.fpsT>=1) { this.fps=this.frames; this.frames=0; this.fpsT=0; }
 
       if (this.playing) {
-        this.p.tick(dt,this.w,this.keys);
+        this.p.tick(dt,this.w,this.keys,this.joy);
         this.w.setView(Math.floor(this.p.pos.x/CS), Math.floor(this.p.pos.z/CS));
         this.w.updateLoading();
         this.ia.cast();
@@ -633,13 +762,16 @@ class Game {
       this.r.render(this.w.scene,this.cam);
 
       var foot=this.w.gb(Math.floor(this.p.pos.x),Math.floor(this.p.pos.y),Math.floor(this.p.pos.z));
-      this.debugEl.innerHTML='FPS: '+this.fps+' | '+this.p.pos.x.toFixed(1)+', '+this.p.pos.y.toFixed(1)+', '+this.p.pos.z.toFixed(1)+' | '+ (BN[foot]||'?')+'<br>WASD移动 空格跳跃 左键破坏 右键放置';
+      var hint=IS_TOUCH?'左侧摇杆移动 · 拖动屏幕转视角 · 右侧按钮跳跃/挖掘/放置'
+                       :'WASD移动 空格跳跃 左键破坏 右键放置';
+      this.debugEl.innerHTML='FPS: '+this.fps+' | '+this.p.pos.x.toFixed(1)+', '+this.p.pos.y.toFixed(1)+', '+this.p.pos.z.toFixed(1)+' | '+ (BN[foot]||'?')+'<br>'+hint;
     } catch(e) { console.error('循环错误:',e); this.debugEl.textContent='错误: '+e.message; }
   }
 }
 
-// 独立点击 + 指针锁定处理器（不依赖 Game 类）
+// 独立点击 + 指针锁定处理器（不依赖 Game 类；触屏设备由 Game 内部处理，无指针锁定）
 (function(){
+  if (('ontouchstart' in window) || navigator.maxTouchPoints > 0) return;
   var blocker = document.getElementById('blocker');
   blocker.addEventListener('click', function(){
     var el = document.querySelector('canvas');
