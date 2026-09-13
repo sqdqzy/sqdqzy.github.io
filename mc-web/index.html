@@ -26,6 +26,8 @@ canvas { display: block; }
 }
 #startBtn:hover { filter: brightness(1.12); }
 #startHint { font-size: 15px; color: #ffd9d9; margin-top: 14px; min-height: 22px; }
+#lockNote { font-size: 13px; color: #9ab; margin-top: 10px; max-width: 460px; line-height: 1.6; }
+#ver { position: absolute; right: 14px; bottom: 10px; color: rgba(255,255,255,0.35); font-size: 12px; }
 @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.05); } }
 
 #crosshair {
@@ -126,7 +128,9 @@ body.touch #act-btns { display: flex; }
     <div class="subtitle">网页版 Minecraft</div>
     <button id="startBtn">开始游戏</button>
     <div id="startHint"></div>
+    <div id="lockNote">点击开始后，鼠标会被锁定用来控制视角（这是正常现象）；随时按 Esc 退出锁定回到此界面。</div>
   </div>
+  <div id="ver">v2.1</div>
 </div>
 
 <div id="crosshair"></div>
@@ -724,22 +728,9 @@ class Game {
       // 按 Esc 退出后浏览器有约 1 秒冷却期，期间请求会被拒绝
       document.getElementById('startHint').textContent = '浏览器暂时拒绝了鼠标锁定（刚按 Esc 会有约 1 秒冷却），稍等一下再点按钮';
     };
-    addEventListener('pointerlockchange',()=>{
-      if (IS_TOUCH) return;
-      const locked = document.pointerLockElement === this.r.domElement;
-      if (locked && !this._lockRequested) {
-        // 防御：浏览器刷新后可能不经点击就自动恢复上次的锁定（Chrome 行为），
-        // 玩家还没点开始就锁上会让按钮点不到，立即退出锁定。
-        document.exitPointerLock();
-        return;
-      }
-      this.playing = locked;
-      this.blocker.style.display = locked ? 'none' : 'flex';
-      if (!locked) {
-        this._lockRequested = false;
-        document.getElementById('startHint').textContent = '';
-      }
-    });
+    // 注意：不监听 pointerlockchange——部分浏览器内核锁定鼠标后不发该事件，
+    // 或 pointerLockElement 与请求元素不一致，靠事件会卡在"鼠标锁死但游戏没开始"。
+    // 状态改由每帧 _syncLock() 直接读取 document.pointerLockElement 自愈同步。
     addEventListener('mousemove',e=>{
       if (!this.playing) return;
       this.p.yaw-=e.movementX*0.002; this.p.pitch-=e.movementY*0.002;
@@ -758,6 +749,24 @@ class Game {
       this._pick(ns);
     });
     if (IS_TOUCH) this._bindTouch();
+  }
+
+  // 每帧同步指针锁定状态与游戏状态（唯一的"进入/退出游戏"判定处）
+  _syncLock() {
+    if (IS_TOUCH) return;
+    const locked = !!document.pointerLockElement; // 不严格要求是渲染 canvas，兼容各内核差异
+    if (locked === this.playing) return;
+    if (locked && !this._lockRequested) {
+      // 未经点击就出现的锁定（如刷新后浏览器自动恢复）：立即退出，按钮必须可点
+      document.exitPointerLock();
+      return;
+    }
+    this.playing = locked;
+    this.blocker.style.display = locked ? 'none' : 'flex';
+    if (!locked) {
+      this._lockRequested = false;
+      document.getElementById('startHint').textContent = '';
+    }
   }
 
   _startTouch() { this.playing=true; this.blocker.style.display='none'; }
@@ -841,6 +850,7 @@ class Game {
       this.lastT=now; this.frames++; this.fpsT+=dt;
       if (this.fpsT>=1) { this.fps=this.frames; this.frames=0; this.fpsT=0; }
 
+      this._syncLock();
       if (this.playing) {
         this.p.tick(dt,this.w,this.keys,this.joy);
         this.w.setView(Math.floor(this.p.pos.x/CS), Math.floor(this.p.pos.z/CS));
