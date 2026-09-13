@@ -13,12 +13,19 @@ canvas { display: block; }
   position: fixed; inset: 0; z-index: 100;
   display: flex; align-items: center; justify-content: center;
   background: rgba(0,0,0,0.6);
-  cursor: pointer;
+  cursor: default;
   user-select: none;
 }
 #blocker .title { font-size: 48px; color: #fff; margin-bottom: 20px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
 #blocker .subtitle { font-size: 18px; color: #ccc; }
-#blocker .click-msg { font-size: 24px; color: #fff; background: #4a4; padding: 12px 32px; border-radius: 8px; margin-top: 30px; animation: pulse 1.5s ease-in-out infinite; }
+#startBtn {
+  font-size: 24px; color: #fff; background: #4a4;
+  padding: 12px 40px; border-radius: 8px; border: none; cursor: pointer;
+  margin-top: 30px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+#startBtn:hover { filter: brightness(1.12); }
+#startHint { font-size: 15px; color: #ffd9d9; margin-top: 14px; min-height: 22px; }
 @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.05); } }
 
 #crosshair {
@@ -107,7 +114,7 @@ body.touch #act-btns { display: flex; }
   #hotbar .slot canvas { width: 26px; height: 26px; }
   #debug { font-size: 11px; padding: 6px 8px; }
   #blocker .title { font-size: 34px; }
-  #blocker .click-msg { font-size: 19px; padding: 10px 24px; }
+  #startBtn { font-size: 19px; padding: 10px 30px; }
 }
 </style>
 </head>
@@ -117,7 +124,8 @@ body.touch #act-btns { display: flex; }
   <div style="text-align:center">
     <div class="title">MC Web</div>
     <div class="subtitle">网页版 Minecraft</div>
-    <div class="click-msg">点击开始游戏</div>
+    <button id="startBtn">开始游戏</button>
+    <div id="startHint"></div>
   </div>
 </div>
 
@@ -697,22 +705,40 @@ class Game {
       if (n>=1&&n<=HB.length) this._pick(n-1);
     });
     addEventListener('keyup',e=>{ this.keys[e.code]=false; });
-    // 全游戏唯一的鼠标锁定入口：点击"开始游戏"之后才请求锁定
-    this.blocker.addEventListener('click',()=>{
+    // 全游戏唯一的锁定入口：只有点击"开始游戏"按钮才请求指针锁定，
+    // 点遮罩其他区域不发生任何事；游戏未开始前绝不锁定鼠标。
+    this._lockRequested = false;
+    document.getElementById('startBtn').addEventListener('click', (e) => {
+      e.stopPropagation();
       if (IS_TOUCH) { this._startTouch(); return; }
+      this._lockRequested = true;
       const p = this.r.domElement.requestPointerLock();
-      if (p && p.catch) p.catch(()=>{ /* 失败走 pointerlockerror 提示 */ });
+      // 部分浏览器只给 Promise 拒绝、不发 pointerlockerror 事件，两条路都接到 _lockFail
+      if (p && p.catch) p.catch(()=>this._lockFail());
     });
+    const onLockFail = () => this._lockFail();
+    addEventListener('pointerlockerror', onLockFail);
+    this._lockFail = () => {
+      if (IS_TOUCH) return;
+      this._lockRequested = false;
+      // 按 Esc 退出后浏览器有约 1 秒冷却期，期间请求会被拒绝
+      document.getElementById('startHint').textContent = '浏览器暂时拒绝了鼠标锁定（刚按 Esc 会有约 1 秒冷却），稍等一下再点按钮';
+    };
     addEventListener('pointerlockchange',()=>{
       if (IS_TOUCH) return;
-      this.playing = document.pointerLockElement===this.r.domElement;
-      this.blocker.style.display = this.playing ? 'none' : 'flex';
-      if (!this.playing) this.blocker.querySelector('.click-msg').textContent = '点击开始游戏';
-    });
-    addEventListener('pointerlockerror',()=>{
-      if (IS_TOUCH) return;
-      // 按 Esc 退出后浏览器有约 1 秒冷却期，期间请求会被拒绝
-      this.blocker.querySelector('.click-msg').textContent = '浏览器暂时拒绝了鼠标锁定，请稍等一下再点';
+      const locked = document.pointerLockElement === this.r.domElement;
+      if (locked && !this._lockRequested) {
+        // 防御：浏览器刷新后可能不经点击就自动恢复上次的锁定（Chrome 行为），
+        // 玩家还没点开始就锁上会让按钮点不到，立即退出锁定。
+        document.exitPointerLock();
+        return;
+      }
+      this.playing = locked;
+      this.blocker.style.display = locked ? 'none' : 'flex';
+      if (!locked) {
+        this._lockRequested = false;
+        document.getElementById('startHint').textContent = '';
+      }
     });
     addEventListener('mousemove',e=>{
       if (!this.playing) return;
