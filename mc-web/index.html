@@ -107,6 +107,7 @@ canvas { display: block; }
   touch-action: none;
 }
 #act-btns .abtn:active { background: rgba(255,255,255,0.32); }
+#act-btns .abtn.active { background: rgba(255,255,255,0.45); border-color: #fff; }
 body.touch #joy { display: block; }
 body.touch #act-btns { display: flex; }
 
@@ -139,6 +140,7 @@ body.touch #act-btns { display: flex; }
 <div id="hotbar"></div>
 <div id="joy"><div class="knob"></div></div>
 <div id="act-btns">
+  <div class="abtn" id="btn-sneak">潜</div>
   <div class="abtn" id="btn-jump">跳</div>
   <div class="abtn" id="btn-break">挖</div>
   <div class="abtn" id="btn-place">放</div>
@@ -284,14 +286,17 @@ function h3(x, y, z) {
   return ((h^(h>>16))&0x7fffffff)/0x7fffffff;
 }
 function sn(x, y, f) {
-  const fx=x*f, fy=y*f; const ix=fx|0, iy=fy|0;
+  const fx=x*f, fy=y*f;
+  // 格点索引必须用 Math.floor：|0 对负数是向零截断，dx 会变负、插值外推出垃圾值，
+  // 导致所有负坐标区域（原点另一侧）地形断裂成尖刺/坑洞。
+  const ix=Math.floor(fx), iy=Math.floor(fy);
   const dx=fx-ix, dy=fy-iy, sx=dx*dx*(3-2*dx), sy=dy*dy*(3-2*dy);
   return h2(ix,iy)*(1-sx)*(1-sy) + h2(ix+1,iy)*sx*(1-sy) + h2(ix,iy+1)*(1-sx)*sy + h2(ix+1,iy+1)*sx*sy;
 }
 // 3D 值噪声（三线性插值），用于洞穴
 function sn3(x, y, z, f) {
   const fx=x*f, fy=y*f, fz=z*f;
-  const ix=fx|0, iy=fy|0, iz=fz|0;
+  const ix=Math.floor(fx), iy=Math.floor(fy), iz=Math.floor(fz);
   const dx=fx-ix, dy=fy-iy, dz=fz-iz;
   const sx=dx*dx*(3-2*dx), sy=dy*dy*(3-2*dy), sz=dz*dz*(3-2*dz);
   const l=(a,b,t)=>a+(b-a)*t;
@@ -555,8 +560,9 @@ class Player {
     this.cam=cam; this.pos=new THREE.Vector3(0,25,0); this.vel=new THREE.Vector3(0,0,0);
     this.yaw=0; this.pitch=0; this.ground=false;
     this.spd=5; this.jmp=8; this.grv=-25; this.w=0.6; this.h=1.8; this.eh=1.6;
+    this.sneak=false; this.sprint=false; this._fov=75;
   }
-  eye() { return new THREE.Vector3(this.pos.x, this.pos.y+this.eh, this.pos.z); }
+  eye() { return new THREE.Vector3(this.pos.x, this.pos.y+(this.sneak?this.eh-0.22:this.eh), this.pos.z); }
   abb(x,y,z) { const hw=this.w/2; return {min:[x-hw,y,z-hw], max:[x+hw,y+this.h,z+hw]}; }
   coll(a, w) {
     for (let x=Math.floor(a.min[0]); x<=Math.floor(a.max[0]); x++)
@@ -566,6 +572,8 @@ class Player {
         }
     return false;
   }
+  // 潜行防坠崖：碰撞盒整体下探 0.06，看是否还站在实体上
+  supported(x, y, z, w) { return this.coll(this.abb(x, y-0.06, z), w); }
   tick(dt, w, keys, joy) {
     const f=new THREE.Vector3(-Math.sin(this.yaw),0,-Math.cos(this.yaw));
     const r=new THREE.Vector3(Math.cos(this.yaw),0,-Math.sin(this.yaw));
@@ -574,15 +582,31 @@ class Player {
     if (keys['KeyA']||keys['a']) m.sub(r); if (keys['KeyD']||keys['d']) m.add(r);
     if (joy && (joy.f || joy.s)) m.addScaledVector(f, joy.f).addScaledVector(r, joy.s);
     if (m.lengthSq()>1) m.normalize();
-    if (m.lengthSq()>0) m.multiplyScalar(this.spd);
+    // 潜行：Shift（键鼠）/ 潜行按钮（触屏）；疾跑：双击 W（keys.__sprint）/ 摇杆拉满（joy.f≥0.95）
+    this.sneak = !!(keys['ShiftLeft']||keys['ShiftRight']||keys['Shift']||(joy&&joy.sneak));
+    this.sprint = !this.sneak && !!(keys.__sprint||(joy&&joy.f>=0.95));
+    if (m.lengthSq()>0) m.multiplyScalar(this.spd*(this.sneak?0.4:1)*(this.sprint?1.6:1));
     if ((keys['Space']||keys['KeyK'])&&this.ground) { this.vel.y=this.jmp; this.ground=false; }
     this.vel.y+=this.grv*dt; if (this.vel.y<-30) this.vel.y=-30;
     this.vel.x=m.x; this.vel.z=m.z;
-    const nx=this.pos.x+this.vel.x*dt; if (!this.coll(this.abb(nx,this.pos.y,this.pos.z),w)) this.pos.x=nx; else this.vel.x=0;
-    const nz=this.pos.z+this.vel.z*dt; if (!this.coll(this.abb(this.pos.x,this.pos.y,nz),w)) this.pos.z=nz; else this.vel.z=0;
+    // 潜行且在地面时：新位置必须有支撑，否则取消该轴移动（不会走出悬崖边）
+    const guard = this.sneak && this.ground;
+    const nx=this.pos.x+this.vel.x*dt;
+    if (!this.coll(this.abb(nx,this.pos.y,this.pos.z),w) && !(guard&&!this.supported(nx,this.pos.y,this.pos.z,w))) this.pos.x=nx; else this.vel.x=0;
+    const nz=this.pos.z+this.vel.z*dt;
+    if (!this.coll(this.abb(this.pos.x,this.pos.y,nz),w) && !(guard&&!this.supported(this.pos.x,this.pos.y,nz,w))) this.pos.z=nz; else this.vel.z=0;
     const ny=this.pos.y+this.vel.y*dt;
     if (!this.coll(this.abb(this.pos.x,ny,this.pos.z),w)) { this.pos.y=ny; this.ground=false; }
     else { if (this.vel.y<0) this.ground=true; this.vel.y=0; }
+    // 虚空救援：掉出世界底部（y<-12）时传回所在位置的地表，防止永远下坠回不来
+    if (this.pos.y < -12) {
+      let sy=-1;
+      for (let y=CH-1; y>=0; y--) if (w.gb(Math.floor(this.pos.x),y,Math.floor(this.pos.z))!==B.AIR) { sy=y; break; }
+      this.pos.y = sy>=0 ? sy+1.5 : 40;   // 区块还没生成就先放高空，等它生成后自然落地
+      this.vel.set(0,0,0);
+    }
+    const fov = this.sprint ? 82 : 75;
+    if (fov !== this._fov) { this._fov=fov; this.cam.fov=fov; this.cam.updateProjectionMatrix(); }
     this.cam.position.copy(this.eye());
     this.cam.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
   }
@@ -669,7 +693,7 @@ class Game {
     this.hotbarEl=document.getElementById('hotbar');
     this.blocker=document.getElementById('blocker');
     this.debugEl=document.getElementById('debug');
-    this.selSlot=0; this.keys={}; this.joy={f:0,s:0}; this.playing=false;
+    this.selSlot=0; this.keys={}; this.joy={f:0,s:0,sneak:false}; this.playing=false;
 
     if (IS_TOUCH) { document.body.classList.add('touch'); this.w.viewDist=3; }
     this.lastT=performance.now(); this.frames=0; this.fpsT=0; this.fps=0;
@@ -707,12 +731,19 @@ class Game {
   _pick(i) { this.selSlot=i; this.hotbarEl.querySelectorAll('.slot').forEach((s,j)=>s.classList.toggle('active',j===i)); }
 
   _bind() {
+    let lastW=0;
     addEventListener('keydown',e=>{
+      // 双击 W 疾跑：两次按下间隔 <280ms（忽略按住不放的自动重复）
+      if (e.code==='KeyW' && !e.repeat) {
+        const now=performance.now();
+        if (now-lastW<280) this.keys.__sprint=true;
+        lastW=now;
+      }
       this.keys[e.code]=true;
       const n=parseInt(e.key);
       if (n>=1&&n<=HB.length) this._pick(n-1);
     });
-    addEventListener('keyup',e=>{ this.keys[e.code]=false; });
+    addEventListener('keyup',e=>{ this.keys[e.code]=false; if (e.code==='KeyW') this.keys.__sprint=false; });
     // 全游戏唯一的锁定入口：只有点击"开始游戏"按钮才请求指针锁定，
     // 点遮罩其他区域不发生任何事；游戏未开始前绝不锁定鼠标。
     this._lockRequested = false;
@@ -807,7 +838,13 @@ class Game {
     joyEl.addEventListener('touchend',joyEnd);
     joyEl.addEventListener('touchcancel',joyEnd);
 
-    // ---- 右下按钮：跳跃 / 挖掘 / 放置 ----
+    // ---- 右下按钮：潜行 / 跳跃 / 挖掘 / 放置 ----
+    const bs=document.getElementById('btn-sneak');
+    bs.addEventListener('touchstart',e=>{
+      e.preventDefault();
+      this.joy.sneak=!this.joy.sneak;
+      bs.classList.toggle('active', this.joy.sneak);
+    },{passive:false});
     const bj=document.getElementById('btn-jump');
     bj.addEventListener('touchstart',e=>{ e.preventDefault(); this.keys['Space']=true; },{passive:false});
     const bjEnd=e=>{ e.preventDefault(); this.keys['Space']=false; };
@@ -864,8 +901,8 @@ class Game {
       this.r.render(this.w.scene,this.cam);
 
       var foot=this.w.gb(Math.floor(this.p.pos.x),Math.floor(this.p.pos.y),Math.floor(this.p.pos.z));
-      var hint=IS_TOUCH?'左侧摇杆移动 · 拖动屏幕转视角 · 右侧按钮跳跃/挖掘/放置'
-                       :'WASD移动 空格跳跃 左键破坏 右键放置';
+      var hint=IS_TOUCH?'左侧摇杆移动（拉满疾跑）· 拖动屏幕转视角 · 右侧潜行/跳跃/挖掘/放置'
+                       :'WASD移动 空格跳跃 Shift潜行 双击W疾跑 左键破坏 右键放置';
       this.debugEl.innerHTML='FPS: '+this.fps+' | '+this.p.pos.x.toFixed(1)+', '+this.p.pos.y.toFixed(1)+', '+this.p.pos.z.toFixed(1)+' | '+ (BN[foot]||'?')+'<br>'+hint;
     } catch(e) { console.error('循环错误:',e); this.debugEl.textContent='错误: '+e.message; }
   }
