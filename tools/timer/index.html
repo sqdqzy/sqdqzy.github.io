@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>计时器</title>
+<style>
+:root{
+  --bg:#0f1115; --card:#1a1d24; --fg:#e8eaed; --sub:#9aa0a6;
+  --accent:#4c8dff; --warn:#ff9f43; --ok:#28c76f;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  margin:0;padding:16px;background:var(--bg);color:var(--fg);
+  font-family:-apple-system,"PingFang SC","Noto Sans CJK SC",system-ui,sans-serif;
+  display:flex;flex-direction:column;gap:14px;min-height:100vh;
+  padding-bottom:32px;
+}
+h1{font-size:15px;font-weight:600;color:var(--sub);margin:0;text-align:center;letter-spacing:2px}
+.tabs{display:flex;background:var(--card);border-radius:12px;padding:4px}
+.tabs button{
+  flex:1;padding:11px;border:0;background:transparent;color:var(--sub);
+  font-size:15px;border-radius:9px;font-weight:600;transition:.2s;
+}
+.tabs button.active{background:var(--accent);color:#fff}
+.display{background:var(--card);border-radius:18px;padding:26px 12px;text-align:center}
+.time{font-size:58px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:1px;line-height:1.15}
+.status{color:var(--sub);font-size:13px;margin-top:10px;min-height:18px}
+.card{background:var(--card);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:14px}
+.row{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.row>label{font-size:14px;color:var(--sub);flex:0 0 auto}
+.num,select{
+  background:#0b0d11;border:1px solid #2a2f3a;color:var(--fg);
+  border-radius:9px;padding:10px 8px;font-size:16px;width:70px;text-align:center;
+  font-variant-numeric:tabular-nums;font-family:inherit;
+  -webkit-appearance:none;appearance:none;
+}
+select{
+  width:auto;text-align:left;padding:10px 30px 10px 12px;
+  background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa0a6' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+}
+.num:focus,select:focus{outline:none;border-color:var(--accent)}
+.tsep{color:#4b5563;font-weight:700}
+.btns{display:flex;gap:10px}
+.btns button{
+  flex:1;padding:17px;border:0;border-radius:14px;font-size:17px;font-weight:700;
+  color:#fff;background:var(--accent);transition:.2s;
+}
+.btns button.ghost{background:#2a2f3a;color:var(--fg);flex:0 0 34%}
+.switch{position:relative;width:48px;height:28px;flex:0 0 auto}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:#3a4150;border-radius:14px;transition:.2s}
+.slider:before{content:"";position:absolute;width:22px;height:22px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+.switch input:checked + .slider{background:var(--ok)}
+.switch input:checked + .slider:before{transform:translateX(20px)}
+.hint{font-size:12px;color:#6b7280;line-height:1.7;padding:0 4px}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<h1>计 时 器</h1>
+
+<div class="tabs">
+  <button id="tabDown" class="active">倒计时</button>
+  <button id="tabUp">正计时</button>
+</div>
+
+<div class="display">
+  <div class="time" id="timeText">05:00</div>
+  <div class="status" id="statusText">就绪</div>
+</div>
+
+<!-- 倒计时设置 -->
+
+<div class="card" id="setupDown">
+  <div class="row">
+    <label>倒计时时长</label>
+    <div style="display:flex;gap:6px;align-items:center">
+      <input class="num" type="text" inputmode="numeric" pattern="[0-9]*" id="hInput" value="0">
+      <span class="tsep">:</span>
+      <input class="num" type="text" inputmode="numeric" pattern="[0-9]*" id="mInput" value="5">
+      <span class="tsep">:</span>
+      <input class="num" type="text" inputmode="numeric" pattern="[0-9]*" id="sInput" value="0">
+    </div>
+  </div>
+  <div class="hint" style="text-align:right;padding:0">时 : 分 : 秒　（点数字可直接改）</div>
+</div>
+
+<!-- 正计时设置 -->
+
+<div class="card hidden" id="setupUp">
+  <div class="row">
+    <label>目标时长</label>
+    <div style="display:flex;gap:6px;align-items:center">
+      <input class="num" type="text" inputmode="numeric" pattern="[0-9]*" id="uhInput" value="0">
+      <span class="tsep">:</span>
+      <input class="num" type="text" inputmode="numeric" pattern="[0-9]*" id="umInput" value="0">
+      <span class="tsep">:</span>
+      <input class="num" type="text" inputmode="numeric" pattern="[0-9]*" id="usInput" value="0">
+    </div>
+  </div>
+  <div class="hint" style="text-align:right;padding:0">全填 0 则不计目标，只往上加</div>
+</div>
+
+<div class="card">
+  <div class="row">
+    <label>语音播报</label>
+    <label class="switch"><input type="checkbox" id="ttsToggle" checked><span class="slider"></span></label>
+  </div>
+
+<div class="row">
+    <label>播报间隔</label>
+    <select id="annPreset">
+      <option value="10">每 10 秒</option>
+      <option value="30">每 30 秒</option>
+      <option value="60" selected>每 1 分钟</option>
+      <option value="120">每 2 分钟</option>
+      <option value="180">每 3 分钟</option>
+      <option value="300">每 5 分钟</option>
+      <option value="600">每 10 分钟</option>
+      <option value="900">每 15 分钟</option>
+      <option value="1800">每 30 分钟</option>
+      <option value="custom">自定义…</option>
+    </select>
+  </div>
+
+<div class="row hidden" id="customRow">
+    <label>自定义间隔</label>
+    <div style="display:flex;gap:6px;align-items:center">
+      <input class="num" type="text" inputmode="numeric" pattern="[0-9]*" id="annInput" value="1">
+      <select id="annUnit">
+        <option value="1">秒</option>
+        <option value="60" selected>分</option>
+      </select>
+    </div>
+  </div>
+
+<div class="row">
+    <label>播报内容</label>
+    <select id="annWhat">
+      <option value="remaining">剩余时间</option>
+      <option value="elapsed">已用时间</option>
+      <option value="both">两者都报</option>
+    </select>
+  </div>
+</div>
+
+<div class="btns">
+  <button id="btnStart">开始</button>
+  <button id="btnReset" class="ghost">重置</button>
+</div>
+
+<div class="hint">
+· 语音走系统 TTS（Web Speech API），请用 Chrome 等外部浏览器打开，首次点「开始」后才有声音。<br>
+· 倒计时最后 10 秒会自动逐秒读秒，结束时播报「时间到」。<br>
+· 请保持页面在前台，后台会被系统限流导致播报延迟。
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var el = {
+    tabDown:$('tabDown'), tabUp:$('tabUp'),
+    timeText:$('timeText'), statusText:$('statusText'),
+    setupDown:$('setupDown'), setupUp:$('setupUp'),
+    h:$('hInput'), m:$('mInput'), s:$('sInput'),
+    uh:$('uhInput'), um:$('umInput'), us:$('usInput'),
+    ttsToggle:$('ttsToggle'),
+    annPreset:$('annPreset'), customRow:$('customRow'),
+    annInput:$('annInput'), annUnit:$('annUnit'), annWhat:$('annWhat'),
+    btnStart:$('btnStart'), btnReset:$('btnReset')
+  };
+
+  var mode = 'down';
+  var running = false;
+  var elapsedMs = 0;
+  var totalMs = 0;
+  var lastTs = 0;
+  var announceBucket = 0;
+  var countdownSpoken = 99;
+  var finished = false;
+  var ttsOn = true;
+  var wakeLock = null;
+
+  // ---------- 工具 ----------
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function num(v, max, def){
+    var n = parseInt(v, 10);
+    if(isNaN(n) || n < 0) n = def || 0;
+    if(max && n > max) n = max;
+    return n;
+  }
+  function fmt(ms){
+    var sec = Math.max(0, Math.round(ms/1000));
+    var h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = sec%60;
+    return h > 0 ? (h + ':' + pad(m) + ':' + pad(s)) : (pad(m) + ':' + pad(s));
+  }
+  function spoken(ms){
+    var sec = Math.max(0, Math.round(ms/1000));
+    var h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = sec%60;
+    var p = [];
+    if(h) p.push(h + '小时');
+    if(m) p.push(m + '分');
+    if(s || !p.length) p.push(s + '秒');
+    return p.join('');
+  }
+  function speak(text){
+    if(!ttsOn || !window.speechSynthesis) return;
+    try{
+      window.speechSynthesis.cancel();
+      setTimeout(function(){
+        var u = new SpeechSynthesisUtterance(text);
+        u.lang = 'zh-CN';
+        u.rate = 1.05;
+        u.pitch = 1;
+        u.volume = 1;
+        window.speechSynthesis.speak(u);
+      }, 60);
+    }catch(e){ console.warn(e); }
+  }
+  function warmTTS(){
+    if(!window.speechSynthesis) return;
+    try{
+      var u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0;
+      u.lang = 'zh-CN';
+      window.speechSynthesis.speak(u);
+    }catch(e){}
+  }
+
+  // ---------- 读取设置 ----------
+  function readDownTotal(){
+    var h = num(el.h.value, 99), m = num(el.m.value, 59), s = num(el.s.value, 59);
+    return ((h*60 + m)*60 + s) * 1000;
+  }
+  function readUpTotal(){
+    var h = num(el.uh.value, 99), m = num(el.um.value, 59), s = num(el.us.value, 59);
+    return ((h*60 + m)*60 + s) * 1000;
+  }
+  function getAnnounceSec(){
+    var p = el.annPreset.value;
+    if(p === 'custom'){
+      var v = num(el.annInput.value, 3600, 1);
+      if(v < 1) v = 1;
+      var unit = parseInt(el.annUnit.value, 10) || 60;
+      return v * unit;
+    }
+    var n = parseInt(p, 10);
+    return (isNaN(n) || n < 1) ? 60 : n;
+  }
+
+  // ---------- 屏幕常亮 ----------
+  function requestWakeLock(){
+    try{
+      if('wakeLock' in navigator && navigator.wakeLock){
+        navigator.wakeLock.request('screen').then(function(w){ wakeLock = w; }).catch(function(){});
+      }
+    }catch(e){}
+  }
+  function releaseWakeLock(){
+    try{ if(wakeLock){ wakeLock.release(); wakeLock = null; } }catch(e){}
+  }
+
+  // ---------- 渲染 ----------
+  function renderCurrent(){
+    var ms;
+    if(mode === 'down'){ totalMs = readDownTotal(); ms = totalMs; }
+    else { totalMs = readUpTotal(); ms = 0; }
+    el.timeText.textContent = fmt(ms);
+  }
+
+  function update(){
+    var displayMs = (mode === 'down')
+      ? Math.max(0, totalMs - elapsedMs)
+      : elapsedMs;
+
+    el.timeText.textContent = fmt(displayMs);
+
+    if(!running) return;
+
+    // 倒计时最后 10 秒读秒
+    if(mode === 'down' && !finished){
+      var leftSec = Math.ceil((totalMs - elapsedMs) / 1000);
+      if(leftSec <= 10 && leftSec > 0 && leftSec < countdownSpoken){
+        countdownSpoken = leftSec;
+        speak(String(leftSec));
+      }
+    }
+
+    // 常规间隔播报
+    handleAnnounce();
+
+    // 结束判定
+    if(mode === 'down' && elapsedMs >= totalMs && !finished){
+      finished = true;
+      running = false;
+      el.btnStart.textContent = '开始';
+      el.btnStart.style.background = '';
+      el.statusText.textContent = '已结束';
+      releaseWakeLock();
+      speak('时间到');
+      return;
+    }
+    if(mode === 'up' && totalMs > 0 && elapsedMs >= totalMs && !finished){
+      finished = true;
+      el.statusText.textContent = '已达到目标时间';
+      speak('已达到目标时间，' + spoken(totalMs));
+    }
+  }
+
+  function handleAnnounce(){
+    var iv = getAnnounceSec();
+    var passed = Math.floor((elapsedMs / 1000) / iv);
+    if(passed <= announceBucket) return;
+    announceBucket = passed;
+
+    // 最后 10 秒交给读秒，避免重复吵
+    if(mode === 'down' && (totalMs - elapsedMs) <= 11000) return;
+
+    var what = el.annWhat.value;
+    var left = totalMs - elapsedMs;
+    var txt = '';
+
+    if(what === 'elapsed'){
+      txt = '已经过去' + spoken(elapsedMs);
+    }else if(what === 'remaining'){
+      if(mode === 'down' || totalMs > 0) txt = '剩余' + spoken(left);
+      else txt = '已经过去' + spoken(elapsedMs);
+    }else{
+      if(mode === 'down') txt = '剩余' + spoken(left) + '，已经过去' + spoken(elapsedMs);
+      else if(totalMs > 0) txt = '已经过去' + spoken(elapsedMs) + '，剩余' + spoken(left);
+      else txt = '已经过去' + spoken(elapsedMs);
+    }
+    el.statusText.textContent = txt;
+    speak(txt);
+  }
+
+  // ---------- 主循环 ----------
+  setInterval(function(){
+    var now = performance.now();
+    var dt = now - lastTs;
+    lastTs = now;
+    if(running && dt > 0 && dt < 5000) elapsedMs += dt;
+    update();
+  }, 200);
+
+  // Chrome 长时间静默后 TTS 会假死
+  setInterval(function(){
+    try{ if(window.speechSynthesis) window.speechSynthesis.resume(); }catch(e){}
+  }, 8000);
+
+  // ---------- 控制 ----------
+  function start(){
+    if(running) return;
+
+    if(elapsedMs === 0){
+      if(mode === 'down'){
+        totalMs = readDownTotal();
+        if(totalMs <= 0){ el.statusText.textContent = '请先设置倒计时时长'; return; }
+      }else{
+        totalMs = readUpTotal();
+      }
+      announceBucket = 0;
+      countdownSpoken = 99;
+      finished = false;
+    }
+
+    running = true;
+    lastTs = performance.now();
+    el.btnStart.textContent = '暂停';
+    el.btnStart.style.background = 'var(--warn)';
+    el.statusText.textContent = '计时中…';
+    warmTTS();
+    requestWakeLock();
+    speak(mode === 'down' ? '开始倒计时' : '开始计时');
+  }
+
+  function pause(){
+    running = false;
+    el.btnStart.textContent = '继续';
+    el.btnStart.style.background = '';
+    el.statusText.textContent = '已暂停';
+    releaseWakeLock();
+  }
+
+  function reset(){
+    running = false;
+    elapsedMs = 0;
+    finished = false;
+    announceBucket = 0;
+    countdownSpoken = 99;
+    el.btnStart.textContent = '开始';
+    el.btnStart.style.background = '';
+    el.statusText.textContent = '就绪';
+    releaseWakeLock();
+    try{ if(window.speechSynthesis) window.speechSynthesis.cancel(); }catch(e){}
+    renderCurrent();
+  }
+
+  function setMode(m){
+    if(running) return;
+    mode = m;
+    el.tabDown.classList.toggle('active', m === 'down');
+    el.tabUp.classList.toggle('active', m === 'up');
+    el.setupDown.classList.toggle('hidden', m !== 'down');
+    el.setupUp.classList.toggle('hidden', m !== 'up');
+    reset();
+  }
+
+  // ---------- 数字输入框处理 ----------
+  function bindNum(inp){
+    inp.addEventListener('input', function(){
+      var v = this.value.replace(/[^0-9]/g, '');
+      if(v !== this.value) this.value = v;
+      if(!running && elapsedMs === 0) renderCurrent();
+    });
+    inp.addEventListener('focus', function(){
+      var t = this;
+      setTimeout(function(){ try{ t.select(); }catch(e){} }, 10);
+    });
+    inp.addEventListener('change', saveCfg);
+  }
+
+  // ---------- 事件 ----------
+  el.btnStart.addEventListener('click', function(){
+    if(running) pause(); else start();
+  });
+  el.btnReset.addEventListener('click', reset);
+  el.tabDown.addEventListener('click', function(){ setMode('down'); });
+  el.tabUp.addEventListener('click', function(){ setMode('up'); });
+
+  el.ttsToggle.addEventListener('change', function(){
+    ttsOn = el.ttsToggle.checked;
+    if(!ttsOn){ try{ window.speechSynthesis.cancel(); }catch(e){} }
+    saveCfg();
+  });
+
+  el.annPreset.addEventListener('change', function(){
+    el.customRow.classList.toggle('hidden', el.annPreset.value !== 'custom');
+    saveCfg();
+  });
+
+  [el.h, el.m, el.s, el.uh, el.um, el.us, el.annInput].forEach(bindNum);
+  [el.annUnit, el.annWhat].forEach(function(x){
+    x.addEventListener('change', saveCfg);
+  });
+
+  // 点击大数字也能开始/暂停
+  el.timeText.addEventListener('click', function(){
+    if(running) pause(); else start();
+  });
+
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden && running) requestWakeLock();
+  });
+
+  // ---------- 配置持久化 ----------
+  function saveCfg(){
+    try{
+      localStorage.setItem('timerCfg2', JSON.stringify({
+        h: el.h.value, m: el.m.value, s: el.s.value,
+        preset: el.annPreset.value, ann: el.annInput.value, unit: el.annUnit.value,
+        what: el.annWhat.value, tts: el.ttsToggle.checked
+      }));
+    }catch(e){}
+  }
+
+  try{
+    var saved = JSON.parse(localStorage.getItem('timerCfg2') || 'null');
+    if(saved){
+      if(saved.h != null) el.h.value = saved.h;
+      if(saved.m != null) el.m.value = saved.m;
+      if(saved.s != null) el.s.value = saved.s;
+      if(saved.preset) el.annPreset.value = saved.preset;
+      if(saved.ann != null) el.annInput.value = saved.ann;
+      if(saved.unit) el.annUnit.value = saved.unit;
+      if(saved.what) el.annWhat.value = saved.what;
+      if(saved.tts != null) el.ttsToggle.checked = saved.tts;
+      ttsOn = el.ttsToggle.checked;
+    }
+  }catch(e){}
+  el.customRow.classList.toggle('hidden', el.annPreset.value !== 'custom');
+
+  renderCurrent();
+})();
+</script>
+
+</body>
+</html>
