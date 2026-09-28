@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>神奇的乔治亚 · 项目索引</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🔬%3C/text%3E%3C/svg%3E">
-  <meta name="description" content="神奇的乔治亚的 HTML 项目索引页，点击即可快速使用">
+  <title>工具箱 · 神奇的乔治亚</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🧰%3C/text%3E%3C/svg%3E">
+  <meta name="description" content="神奇的乔治亚的在线工具箱，全部纯前端、打开即用">
   <style>
     /* ===== 主题变量：浅色模式 ===== */
     :root {
@@ -67,7 +67,7 @@
       align-items: center;
       padding: 28px 0;
     }
-    .logo { font-weight: 700; font-size: 18px; letter-spacing: 1px; }
+    .logo { font-weight: 700; font-size: 18px; letter-spacing: 1px; color: var(--text); text-decoration: none; }
     .logo span { color: var(--accent); }
     .header-right { display: flex; align-items: center; gap: 12px; }
 
@@ -100,13 +100,13 @@
     .theme-btn:hover { transform: rotate(30deg) scale(1.1); }
 
     /* ===== 首屏区域 ===== */
-    .hero { text-align: center; padding: 72px 0 56px; }
+    .hero { text-align: center; padding: 56px 0 48px; }
 
-    .avatar {
-      width: 96px;
-      height: 96px;
-      margin: 0 auto 24px;
-      border-radius: 50%;
+    .hero-icon {
+      width: 88px;
+      height: 88px;
+      margin: 0 auto 20px;
+      border-radius: 24px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -121,7 +121,7 @@
     }
 
     h1 {
-      font-size: clamp(32px, 6vw, 52px);
+      font-size: clamp(28px, 5vw, 44px);
       font-weight: 800;
       background: linear-gradient(90deg, var(--accent), var(--accent-2));
       -webkit-background-clip: text;
@@ -131,48 +131,17 @@
     }
 
     .tagline {
-      font-size: clamp(15px, 2.5vw, 19px);
+      font-size: clamp(14px, 2.5vw, 17px);
       color: var(--text-sub);
       max-width: 560px;
-      margin: 0 auto 32px;
-    }
-    .tagline .cursor {
-      display: inline-block;
-      width: 2px;
-      height: 1em;
-      background: var(--accent);
-      vertical-align: -0.15em;
-      animation: blink 0.8s step-end infinite;
-    }
-    @keyframes blink { 50% { opacity: 0; } }
-
-    /* ===== 社交链接按钮 ===== */
-    .social-links { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
-    .social-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 22px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      background: var(--bg-card);
-      color: var(--text);
-      text-decoration: none;
-      font-weight: 500;
-      box-shadow: var(--shadow);
-      transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-    }
-    .social-btn:hover {
-      transform: translateY(-4px);
-      box-shadow: var(--shadow-hover);
-      border-color: var(--accent);
+      margin: 0 auto;
     }
 
     /* ===== 分区标题 ===== */
     section h2 {
-      font-size: 26px;
+      font-size: 24px;
       font-weight: 700;
-      margin-bottom: 28px;
+      margin-bottom: 8px;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -180,13 +149,14 @@
     section h2::before {
       content: "";
       width: 6px;
-      height: 26px;
+      height: 24px;
       border-radius: 3px;
       background: linear-gradient(180deg, var(--accent), var(--accent-2));
     }
+    .section-sub { color: var(--text-sub); font-size: 14px; margin: 0 0 24px; }
 
     /* ===== 项目卡片网格 ===== */
-    .projects-section { padding: 40px 0 64px; }
+    .grid-section { padding: 8px 0 64px; }
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -226,19 +196,8 @@
     }
     .card h3 { font-size: 19px; margin-bottom: 8px; }
     .card p { font-size: 14px; color: var(--text-sub); margin-bottom: 18px; min-height: 44px; }
-    .card-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      color: var(--accent);
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 14px;
-    }
-    .card-link:hover { text-decoration: underline; }
-    .card-links { display: flex; gap: 12px; margin-top: 12px; align-items: center; }
 
-    /* ===== 「快速使用」按钮 ===== */
+    /* ===== 「打开」按钮 ===== */
     .btn-play {
       display: inline-flex;
       align-items: center;
@@ -255,7 +214,6 @@
     }
     .btn-play:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); filter: brightness(1.08); }
 
-    .section-sub { color: var(--text-sub); font-size: 14px; margin: -16px 0 24px; }
     .loading { color: var(--text-sub); font-size: 14px; }
 
     /* ===== 页脚 ===== */
@@ -271,7 +229,7 @@
 
     /* ===== 小屏适配 ===== */
     @media (max-width: 520px) {
-      .hero { padding: 48px 0 40px; }
+      .hero { padding: 40px 0 32px; }
       .grid { grid-template-columns: 1fr; }
       .nav-link { display: none; }
     }
@@ -282,53 +240,27 @@
   <div class="bg-glow glow-2"></div>
 
   <main>
-    <!-- 顶部：站名 + 工具/游戏导航 + 深色模式开关 -->
+    <!-- 顶部：站名 + 返回主页 + 深色模式开关 -->
     <header>
-      <div class="logo">乔治亚<span>.lab</span></div>
+      <a class="logo" href="../">乔治亚<span>.lab</span></a>
       <div class="header-right">
-        <a class="nav-link" href="./tools.html">🧰 工具箱</a>
-        <a class="nav-link" href="./games.html">🎮 游戏厅</a>
+        <a class="nav-link" href="../">← 返回主页</a>
         <button class="theme-btn" id="themeBtn" title="切换深色 / 浅色模式" aria-label="切换主题">🌙</button>
       </div>
     </header>
 
     <!-- 首屏 -->
     <section class="hero">
-      <div class="avatar" style="background-image: url('https://avatars.githubusercontent.com/u/295380872'); background-size: cover; background-position: center;"></div>
-      <h1>你好，我是神奇的乔治亚</h1>
-      <p class="tagline">
-        <span id="typewriter"></span><span class="cursor"></span>
-      </p>
-      <nav class="social-links">
-        <a class="social-btn" href="https://github.com/sqdqzy" target="_blank" rel="noopener">🐙 GitHub</a>
-        <a class="social-btn" href="https://gitee.com/sqdqzy" target="_blank" rel="noopener">🦅 Gitee</a>
-        <a class="social-btn" href="https://space.bilibili.com/630509429" target="_blank" rel="noopener">📺 哔哩哔哩</a>
-      </nav>
+      <div class="hero-icon">🧰</div>
+      <h1>工具箱</h1>
+      <p class="tagline">纯前端、打开即用的在线小工具，无需登录，不上传数据</p>
     </section>
 
-    <!-- 快速入口：工具箱 / 游戏厅（具体项目都在各自目录页里） -->
-    <section class="projects-section">
-      <div class="grid">
-        <article class="card visible hub-card">
-          <div class="card-icon">🧰</div>
-          <h3>工具箱</h3>
-          <p>计时器等在线小工具持续上新，纯前端、打开即用，无需登录</p>
-          <a class="btn-play" href="./tools.html">▶ 进入工具箱</a>
-        </article>
-        <article class="card visible hub-card">
-          <div class="card-icon">🎮</div>
-          <h3>游戏厅</h3>
-          <p>网页版 Minecraft 等小游戏，电脑手机都能玩</p>
-          <a class="btn-play" href="./games.html">▶ 进入游戏厅</a>
-        </article>
-      </div>
-    </section>
-
-    <!-- 项目索引区：下 · 其他项目（GitHub / Gitee 仓库） -->
-    <section class="projects-section" style="padding-top: 0;">
-      <h2>其他项目</h2>
-      <p class="section-sub">托管在 GitHub / Gitee 上的代码仓库</p>
-      <div class="grid" id="repoGrid"></div>
+    <!-- 工具列表 -->
+    <section class="grid-section">
+      <h2>全部工具</h2>
+      <p class="section-sub">放入 tools/ 文件夹（含 index.html + 简介.txt）即可自动上架</p>
+      <div class="grid" id="toolGrid"></div>
     </section>
   </main>
 
@@ -338,34 +270,6 @@
   </footer>
 
   <script>
-    // ===== 打字机效果 =====
-    const sentences = [
-      "上面是我的 HTML 项目，点开即用",
-      "下面是我的代码仓库",
-      "所有项目与 OpenCode 共同创作"
-    ];
-    const typeTarget = document.getElementById("typewriter");
-    let si = 0, ci = 0, deleting = false;
-
-    function typeLoop() {
-      const current = sentences[si];
-      typeTarget.textContent = current.slice(0, ci);
-      let delay = deleting ? 40 : 110;
-
-      if (!deleting && ci === current.length) {
-        delay = 2000;           // 整句停留
-        deleting = true;
-      } else if (deleting && ci === 0) {
-        deleting = false;
-        si = (si + 1) % sentences.length;
-        delay = 400;
-      } else {
-        ci += deleting ? -1 : 1;
-      }
-      setTimeout(typeLoop, delay);
-    }
-    typeLoop();
-
     // ===== 深色 / 浅色模式切换（记忆用户选择）=====
     // 注意：iOS 隐私模式等环境下 localStorage 读写会直接抛异常，
     // 必须全程 try/catch，否则脚本在绑定按钮事件前就会中断，导致无法切换主题。
@@ -414,115 +318,56 @@
       }[c]));
     }
 
-    // ===== 其他项目（动态加载 GitHub 和 Gitee 仓库）=====
-    async function fetchGitHubRepos(username) {
-      try {
-        const response = await fetch(`https://api.github.com/users/${username}/repos`);
-        if (!response.ok) throw new Error('GitHub API 请求失败');
-        const repos = await response.json();
-        return repos.map(repo => ({
-          name: repo.name,
-          description: repo.description || '暂无描述',
-          url: repo.html_url,
-          platform: 'github'
-        }));
-      } catch (error) {
-        console.error('获取 GitHub 仓库失败:', error);
-        return [];
+    // ===== 工具列表：扫描本仓库 tools/ 目录 =====
+    // 约定：tools/ 下每个同时包含 index.html 和 简介.txt 的文件夹即为一个工具；
+    // 简介.txt 第一行为标题，其余行为简介。
+    const SUB_DIR = 'tools';
+    const CARD_ICON = '🔧';
+    const REPO_CONTENTS = 'https://api.github.com/repos/sqdqzy/sqdqzy.github.io/contents/';
+
+    async function loadTools() {
+      const res = await fetch(REPO_CONTENTS + SUB_DIR);
+      if (!res.ok) throw new Error('GitHub API 请求失败');
+      const items = await res.json();
+      const dirs = items.filter(i => i.type === 'dir');
+      const out = [];
+      for (const d of dirs) {
+        try {
+          const r = await fetch(REPO_CONTENTS + SUB_DIR + '/' + encodeURIComponent(d.name) + '/' + encodeURIComponent('简介.txt'));
+          if (!r.ok) continue;   // 缺少简介.txt 的文件夹不算工具
+          const j = await r.json();
+          const text = new TextDecoder().decode(Uint8Array.from(atob((j.content || '').replace(/\s/g, '')), c => c.charCodeAt(0)));
+          const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
+          if (lines.length === 0) continue;
+          out.push({ name: d.name, title: lines[0], desc: lines.slice(1).join(' ') || '点击打开使用' });
+        } catch (e) { /* 跳过读取异常的文件夹 */ }
       }
+      return out;
     }
 
-    async function fetchGiteeRepos(username) {
+    async function renderTools() {
+      const grid = document.getElementById('toolGrid');
+      grid.innerHTML = '<p class="loading">正在加载工具列表...</p>';
       try {
-        const response = await fetch(`https://gitee.com/api/v5/users/${username}/repos`);
-        if (!response.ok) throw new Error('Gitee API 请求失败');
-        const repos = await response.json();
-        return repos.map(repo => ({
-          name: repo.name,
-          description: repo.description || '暂无描述',
-          url: repo.html_url,
-          platform: 'gitee'
-        }));
-      } catch (error) {
-        console.error('获取 Gitee 仓库失败:', error);
-        return [];
-      }
-    }
-
-    async function loadRepoProjects() {
-      const username = 'sqdqzy';
-      const [githubRepos, giteeRepos] = await Promise.all([
-        fetchGitHubRepos(username),
-        fetchGiteeRepos(username)
-      ]);
-
-      const repoMap = new Map();
-      githubRepos.forEach(repo => {
-        if (repo.name === 'sqdqzy.github.io') return;   // 主页仓库本身不展示
-        repoMap.set(repo.name, {
-          title: repo.name,
-          desc: repo.description,
-          github: repo.url,
-          gitee: null
-        });
-      });
-
-      giteeRepos.forEach(repo => {
-        if (repo.name === 'sqdqzy.github.io') return;
-        if (repoMap.has(repo.name)) {
-          repoMap.get(repo.name).gitee = repo.url;
-        } else {
-          repoMap.set(repo.name, {
-            title: repo.name,
-            desc: repo.description,
-            github: null,
-            gitee: repo.url
-          });
-        }
-      });
-
-      return Array.from(repoMap.values());
-    }
-
-    async function renderRepoProjects() {
-      const grid = document.getElementById('repoGrid');
-      grid.innerHTML = '<p class="loading">正在加载项目列表...</p>';
-      try {
-        const projects = await loadRepoProjects();
-        if (projects.length === 0) {
-          grid.innerHTML = '<p class="loading">暂无项目或加载失败</p>';
-          return;
-        }
-
-        grid.innerHTML = projects.map(p => {
-          let links = '';
-          if (p.github) {
-            links += `<a class="card-link" href="${escapeHTML(p.github)}" target="_blank" rel="noopener">GitHub</a>`;
-          }
-          if (p.gitee) {
-            links += `<a class="card-link" href="${escapeHTML(p.gitee)}" target="_blank" rel="noopener">Gitee</a>`;
-          }
-          return `
+        const list = await loadTools();
+        grid.innerHTML = list.length === 0
+          ? '<p class="loading">暂无工具（往 tools/ 放「文件夹 + index.html + 简介.txt」即可自动出现）</p>'
+          : list.map(p => `
             <article class="card">
-              <div class="card-icon">📦</div>
+              <div class="card-icon">${CARD_ICON}</div>
               <h3>${escapeHTML(p.title)}</h3>
               <p>${escapeHTML(p.desc)}</p>
               <div class="card-links">
-                ${links}
+                <a class="btn-play" href="./${SUB_DIR}/${encodeURIComponent(p.name)}/" target="_blank" rel="noopener">▶ 打开使用</a>
               </div>
-            </article>
-          `;
-        }).join("");
-
+            </article>`).join('');
         initScrollAnimation(grid);
       } catch (error) {
-        grid.innerHTML = '<p class="loading">项目加载失败，请刷新重试</p>';
+        grid.innerHTML = '<p class="loading">工具列表加载失败，请刷新重试</p>';
       }
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-      renderRepoProjects();
-    });
+    document.addEventListener('DOMContentLoaded', renderTools);
   </script>
 </body>
 </html>
