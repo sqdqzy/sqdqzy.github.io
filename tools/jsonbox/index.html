@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>编码工具箱</title>
+<style>
+:root{
+  --bg:#0f1115; --card:#1a1d24; --fg:#e8eaed; --sub:#9aa0a6;
+  --accent:#4c8dff; --warn:#ff9f43; --ok:#28c76f; --err:#ff6b6b;
+  --line:#2a2f3a; --input:#0b0d11;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  margin:0;padding:16px;background:var(--bg);color:var(--fg);
+  font-family:-apple-system,"PingFang SC","Noto Sans CJK SC",system-ui,sans-serif;
+  display:flex;flex-direction:column;gap:14px;min-height:100vh;
+  padding-bottom:40px;max-width:640px;margin:0 auto;width:100%;
+}
+h1{font-size:15px;font-weight:600;color:var(--sub);margin:0;text-align:center;letter-spacing:2px}
+.tabs{display:flex;background:var(--card);border-radius:12px;padding:4px;gap:4px}
+.tabs button{
+  flex:1;padding:11px 4px;border:0;background:transparent;color:var(--sub);
+  font-size:14.5px;border-radius:9px;font-weight:600;transition:.2s;cursor:pointer;font-family:inherit;
+}
+.tabs button.active{background:var(--accent);color:#fff}
+.panel{display:none;flex-direction:column;gap:12px}
+.panel.active{display:flex}
+.card{background:var(--card);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+label{font-size:13.5px;color:var(--sub)}
+textarea{
+  background:var(--input);border:1px solid var(--line);color:var(--fg);
+  border-radius:9px;padding:11px 12px;font-size:14px;font-family:ui-monospace,Consolas,"Cascadia Code",monospace;
+  width:100%;resize:vertical;min-height:120px;line-height:1.65;tab-size:2;
+}
+textarea:focus{outline:none;border-color:var(--accent)}
+textarea[readonly]{color:#b9c0cf}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btns button{
+  flex:1;min-width:76px;padding:11px 6px;border:0;border-radius:10px;font-size:13.5px;font-weight:700;
+  color:#fff;background:var(--accent);cursor:pointer;transition:.15s;font-family:inherit;
+}
+.btns button:active{transform:scale(.96)}
+.btns button.ghost{background:var(--line);color:var(--fg)}
+.btns button.okbtn{background:var(--ok);color:#04240f}
+.status{font-size:12.5px;min-height:17px;line-height:1.5}
+.status.error{color:var(--err)}
+.status.success{color:var(--ok)}
+.status.muted{color:#6b7280}
+.opts{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--sub)}
+.opts label{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--sub)}
+.hint{font-size:12px;color:#6b7280;line-height:1.7}
+.arrow{text-align:center;color:var(--sub);font-size:16px;margin:-4px 0}
+select{
+  background:var(--input);border:1px solid var(--line);color:var(--fg);border-radius:9px;
+  padding:9px 10px;font-size:14px;font-family:inherit;
+}
+select:focus{outline:none;border-color:var(--accent)}
+</style>
+</head>
+<body>
+
+<h1>编 码 工 具 箱</h1>
+
+<div class="tabs">
+  <button id="tabJson" class="active">JSON</button>
+  <button id="tabB64">Base64</button>
+  <button id="tabUrl">URL</button>
+  <button id="tabHtml">HTML</button>
+</div>
+
+<!-- ============ JSON ============ -->
+<div class="panel active" id="panelJson">
+  <div class="card">
+    <label>输入 JSON（支持粘贴后自动校验）</label>
+    <textarea id="jsonIn" placeholder='{"name":"乔治亚","tools":["json","base64"]}' spellcheck="false"></textarea>
+    <div class="status muted" id="jsonStatus">等待输入</div>
+    <div class="btns">
+      <button id="btnFormat2">格式化 2 空格</button>
+      <button id="btnFormat4">4 空格</button>
+      <button class="ghost" id="btnMinify">压缩</button>
+    </div>
+    <div class="btns">
+      <button class="okbtn" id="btnJsonCopy">复制结果</button>
+      <button class="ghost" id="btnJsonSort">键排序</button>
+      <button class="ghost" id="btnJsonSample">示例</button>
+      <button class="ghost" id="btnJsonClear">清空</button>
+    </div>
+    <div class="opts">
+      <label><input type="checkbox" id="optAscii"> 中文转 \uXXXX</label>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Base64 ============ -->
+<div class="panel" id="panelB64">
+  <div class="card">
+    <label>原文（支持中文，按 UTF-8 处理）</label>
+    <textarea id="b64In" placeholder="要编码的文字，或直接粘贴 Base64 用来解码" spellcheck="false"></textarea>
+    <div class="btns">
+      <button id="btnB64Enc">编码 →</button>
+      <button id="btnB64Dec">← 解码</button>
+    </div>
+    <div class="arrow">⇅</div>
+    <label>结果</label>
+    <textarea id="b64Out" readonly placeholder="结果会显示在这里"></textarea>
+    <div class="status muted" id="b64Status">编码与解码均在本机完成，不会上传</div>
+    <div class="btns">
+      <button class="okbtn" id="btnB64Copy">复制结果</button>
+      <button class="ghost" id="btnB64Swap">结果 → 输入</button>
+      <button class="ghost" id="btnB64Clear">清空</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ URL ============ -->
+<div class="panel" id="panelUrl">
+  <div class="card">
+    <label>原文 / 编码串</label>
+    <textarea id="urlIn" placeholder="https://example.com/搜索?q=中文 参数，或粘贴 %XX 编码串" spellcheck="false"></textarea>
+    <div class="btns">
+      <button id="btnUrlEnc">encodeURIComponent</button>
+      <button id="btnUrlDec">decodeURIComponent</button>
+    </div>
+    <div class="btns">
+      <button class="ghost" id="btnUrlEncAll">encodeURI（保留 /:?）</button>
+      <button class="ghost" id="btnUrlDecAll">decodeURI</button>
+    </div>
+    <div class="arrow">⇅</div>
+    <label>结果</label>
+    <textarea id="urlOut" readonly placeholder="结果会显示在这里"></textarea>
+    <div class="status muted" id="urlStatus">注意：decode 对非法 % 序列会报错</div>
+    <div class="btns">
+      <button class="okbtn" id="btnUrlCopy">复制结果</button>
+      <button class="ghost" id="btnUrlSwap">结果 → 输入</button>
+      <button class="ghost" id="btnUrlClear">清空</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ HTML ============ -->
+<div class="panel" id="panelHtml">
+  <div class="card">
+    <label>原文 / HTML 片段</label>
+    <textarea id="htmlIn" placeholder="粘贴 HTML 标签来转义，或粘贴 &lt;div&gt; 实体来还原" spellcheck="false"></textarea>
+    <div class="btns">
+      <button id="btnHtmlEsc">转义（安全输出）</button>
+      <button id="btnHtmlUnesc">反转义（还原标签）</button>
+    </div>
+    <div class="arrow">⇅</div>
+    <label>结果</label>
+    <textarea id="htmlOut" readonly placeholder="结果会显示在这里"></textarea>
+    <div class="status muted" id="htmlStatus">转义覆盖 &amp; &lt; &gt; " ' 五个字符</div>
+    <div class="btns">
+      <button class="okbtn" id="btnHtmlCopy">复制结果</button>
+      <button class="ghost" id="btnHtmlSwap">结果 → 输入</button>
+      <button class="ghost" id="btnHtmlClear">清空</button>
+    </div>
+  </div>
+</div>
+
+<div class="hint">
+· 全部运算在浏览器本机完成，刷新即清空，适合处理含隐私的接口报文。<br>
+· Base64 不是加密，只是编码；URL 编码常用于 query 参数里的中文与特殊符号。
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+
+  // ---------- 通用：复制 / 状态 ----------
+  function copy(text, statusEl, okMsg){
+    if (!text){ setStatus(statusEl, '没有可复制的内容', 'error'); return; }
+    var done = function(){ setStatus(statusEl, okMsg || '已复制到剪贴板', 'success'); };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){ fb(text, done); });
+    } else fb(text, done);
+  }
+  function fb(text, done){
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); done(); }catch(e){}
+    document.body.removeChild(ta);
+  }
+  function setStatus(node, msg, cls){
+    node.textContent = msg;
+    node.className = 'status ' + (cls || 'muted');
+  }
+
+  // ---------- Tabs ----------
+  var tabs = [['tabJson','panelJson'],['tabB64','panelB64'],['tabUrl','panelUrl'],['tabHtml','panelHtml']];
+  tabs.forEach(function(pair){
+    $(pair[0]).addEventListener('click', function(){
+      tabs.forEach(function(p){
+        $(p[0]).classList.toggle('active', p[0] === pair[0]);
+        $(p[1]).classList.toggle('active', p[1] === pair[1]);
+      });
+    });
+  });
+
+  // ============================================================
+  // JSON
+  // ============================================================
+  var jsonIn = $('jsonIn'), jsonStatus = $('jsonStatus');
+
+  function locateError(text, message){
+    // V8: "at position 12" / "at line 3 column 5"; Firefox: "line 1 column 2"
+    var m = message.match(/position (\d+)/);
+    if (m){
+      var pos = Math.min(parseInt(m[1], 10), text.length);
+      var before = text.slice(0, pos);
+      var line = before.split('\n').length;
+      var col = pos - before.lastIndexOf('\n');
+      return '第 ' + line + ' 行，第 ' + col + ' 列附近有误';
+    }
+    m = message.match(/line (\d+) column (\d+)/);
+    if (m) return '第 ' + m[1] + ' 行，第 ' + m[2] + ' 列附近有误';
+    return '';
+  }
+
+  function parseJson(){
+    var raw = jsonIn.value.trim();
+    if (!raw){ setStatus(jsonStatus, '等待输入', 'muted'); return null; }
+    try{
+      var data = JSON.parse(raw);
+      setStatus(jsonStatus, '✓ 合法 JSON' + (typeof data === 'object' && data !== null ?
+        '（' + (Array.isArray(data) ? '数组，' + data.length + ' 项' : '对象，' + Object.keys(data).length + ' 个键') + '）' : ''), 'success');
+      return data;
+    }catch(e){
+      setStatus(jsonStatus, '✗ ' + locateError(raw, e.message) + ' — ' + e.message.replace(/at position.*/, '').trim(), 'error');
+      return undefined; // undefined = 解析失败；null = 空输入
+    }
+  }
+
+  function stringify(data, space){
+    var s = JSON.stringify(data, null, space);
+    if ($('optAscii').checked){
+      s = s.replace(/[\u4e00-\u9fa5\uff00-\uffef]/g, function(ch){
+        return '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0');
+      });
+    }
+    return s;
+  }
+
+  function doFormat(space){
+    var data = parseJson();
+    if (data === null){ jsonIn.value = ''; return; }
+    if (data === undefined) return;
+    jsonIn.value = stringify(data, space);
+    setStatus(jsonStatus, '✓ 已格式化，共 ' + jsonIn.value.split('\n').length + ' 行', 'success');
+  }
+  $('btnFormat2').addEventListener('click', function(){ doFormat(2); });
+  $('btnFormat4').addEventListener('click', function(){ doFormat(4); });
+  $('btnMinify').addEventListener('click', function(){
+    var data = parseJson();
+    if (data === null || data === undefined) return;
+    jsonIn.value = JSON.stringify(data);
+    setStatus(jsonStatus, '✓ 已压缩为 ' + jsonIn.value.length + ' 字符', 'success');
+  });
+  $('btnJsonSort').addEventListener('click', function(){
+    var data = parseJson();
+    if (data === null || data === undefined) return;
+    var sortDeep = function(v){
+      if (Array.isArray(v)) return v.map(sortDeep);
+      if (v && typeof v === 'object'){
+        var out = {};
+        Object.keys(v).sort().forEach(function(k){ out[k] = sortDeep(v[k]); });
+        return out;
+      }
+      return v;
+    };
+    jsonIn.value = stringify(sortDeep(data), 2);
+    setStatus(jsonStatus, '✓ 所有对象的键已按字母排序', 'success');
+  });
+  $('btnJsonCopy').addEventListener('click', function(){ copy(jsonIn.value, jsonStatus, '已复制 JSON'); });
+  $('btnJsonClear').addEventListener('click', function(){ jsonIn.value = ''; setStatus(jsonStatus, '等待输入', 'muted'); });
+  $('btnJsonSample').addEventListener('click', function(){
+    jsonIn.value = JSON.stringify({
+      name: "神奇的乔治亚",
+      site: "sqdqzy.github.io",
+      tools: ["jsonbox", "timestamp", "pomodoro"],
+      nested: { ok: true, count: 42, list: [1, 2, 3] },
+      "带 空格 的键": "值也可以有中文"
+    }, null, 2);
+    parseJson();
+  });
+
+  var jsonTimer = null;
+  jsonIn.addEventListener('input', function(){
+    clearTimeout(jsonTimer);
+    jsonTimer = setTimeout(parseJson, 400);
+  });
+
+  // ============================================================
+  // Base64（UTF-8 安全）
+  // ============================================================
+  var b64In = $('b64In'), b64Out = $('b64Out'), b64Status = $('b64Status');
+
+  function b64encode(str){
+    var bytes = new TextEncoder().encode(str);
+    var bin = '';
+    bytes.forEach(function(b){ bin += String.fromCharCode(b); });
+    return btoa(bin);
+  }
+  function b64decode(str){
+    str = str.replace(/\s+/g, '');
+    var bin = atob(str);
+    var bytes = Uint8Array.from(bin, function(c){ return c.charCodeAt(0); });
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  }
+  $('btnB64Enc').addEventListener('click', function(){
+    if (!b64In.value){ setStatus(b64Status, '请先输入要编码的文字', 'error'); return; }
+    try{
+      b64Out.value = b64encode(b64In.value);
+      setStatus(b64Status, '✓ 编码完成（' + b64In.value.length + ' 字符 → ' + b64Out.value.length + ' 字符）', 'success');
+    }catch(e){ setStatus(b64Status, '编码失败：' + e.message, 'error'); }
+  });
+  $('btnB64Dec').addEventListener('click', function(){
+    if (!b64In.value){ setStatus(b64Status, '请先粘贴 Base64 字符串', 'error'); return; }
+    try{
+      b64Out.value = b64decode(b64In.value);
+      setStatus(b64Status, '✓ 解码完成', 'success');
+    }catch(e){
+      setStatus(b64Status, '解码失败：不是合法的 Base64，或内容不是 UTF-8 文本', 'error');
+    }
+  });
+  $('btnB64Copy').addEventListener('click', function(){ copy(b64Out.value, b64Status, '已复制'); });
+  $('btnB64Swap').addEventListener('click', function(){ b64In.value = b64Out.value; b64Out.value = ''; setStatus(b64Status, '已移到输入框', 'muted'); });
+  $('btnB64Clear').addEventListener('click', function(){ b64In.value = ''; b64Out.value = ''; setStatus(b64Status, '已清空', 'muted'); });
+
+  // ============================================================
+  // URL
+  // ============================================================
+  var urlIn = $('urlIn'), urlOut = $('urlOut'), urlStatus = $('urlStatus');
+
+  function urlRun(fn, name){
+    if (!urlIn.value){ setStatus(urlStatus, '请先输入内容', 'error'); return; }
+    try{
+      urlOut.value = fn(urlIn.value);
+      setStatus(urlStatus, '✓ ' + name + ' 完成', 'success');
+    }catch(e){ setStatus(urlStatus, '失败：' + e.message, 'error'); }
+  }
+  $('btnUrlEnc').addEventListener('click', function(){ urlRun(encodeURIComponent, 'encodeURIComponent'); });
+  $('btnUrlDec').addEventListener('click', function(){ urlRun(decodeURIComponent, 'decodeURIComponent'); });
+  $('btnUrlEncAll').addEventListener('click', function(){ urlRun(encodeURI, 'encodeURI'); });
+  $('btnUrlDecAll').addEventListener('click', function(){ urlRun(decodeURI, 'decodeURI'); });
+  $('btnUrlCopy').addEventListener('click', function(){ copy(urlOut.value, urlStatus, '已复制'); });
+  $('btnUrlSwap').addEventListener('click', function(){ urlIn.value = urlOut.value; urlOut.value = ''; setStatus(urlStatus, '已移到输入框', 'muted'); });
+  $('btnUrlClear').addEventListener('click', function(){ urlIn.value = ''; urlOut.value = ''; setStatus(urlStatus, '已清空', 'muted'); });
+
+  // ============================================================
+  // HTML 实体
+  // ============================================================
+  var htmlIn = $('htmlIn'), htmlOut = $('htmlOut'), htmlStatus = $('htmlStatus');
+
+  var ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  $('btnHtmlEsc').addEventListener('click', function(){
+    if (!htmlIn.value){ setStatus(htmlStatus, '请先输入内容', 'error'); return; }
+    htmlOut.value = htmlIn.value.replace(/[&<>"']/g, function(c){ return ESC_MAP[c]; });
+    setStatus(htmlStatus, '✓ 已转义，可安全插入 innerHTML', 'success');
+  });
+  $('btnHtmlUnesc').addEventListener('click', function(){
+    if (!htmlIn.value){ setStatus(htmlStatus, '请先输入内容', 'error'); return; }
+    htmlOut.value = htmlIn.value
+      .replace(/&#x([0-9a-f]+);/gi, function(_, h){ return String.fromCharCode(parseInt(h, 16)); })
+      .replace(/&#(\d+);/g, function(_, d){ return String.fromCharCode(parseInt(d, 10)); })
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+      .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
+    setStatus(htmlStatus, '✓ 已还原实体', 'success');
+  });
+  $('btnHtmlCopy').addEventListener('click', function(){ copy(htmlOut.value, htmlStatus, '已复制'); });
+  $('btnHtmlSwap').addEventListener('click', function(){ htmlIn.value = htmlOut.value; htmlOut.value = ''; setStatus(htmlStatus, '已移到输入框', 'muted'); });
+  $('btnHtmlClear').addEventListener('click', function(){ htmlIn.value = ''; htmlOut.value = ''; setStatus(htmlStatus, '已清空', 'muted'); });
+})();
+</script>
+
+</body>
+</html>

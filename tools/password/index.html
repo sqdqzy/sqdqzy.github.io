@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>密码生成器</title>
+<style>
+:root{
+  --bg:#0f1115; --card:#1a1d24; --fg:#e8eaed; --sub:#9aa0a6;
+  --accent:#4c8dff; --warn:#ff9f43; --ok:#28c76f; --err:#ff6b6b;
+  --line:#2a2f3a; --input:#0b0d11;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  margin:0;padding:16px;background:var(--bg);color:var(--fg);
+  font-family:-apple-system,"PingFang SC","Noto Sans CJK SC",system-ui,sans-serif;
+  display:flex;flex-direction:column;gap:14px;min-height:100vh;
+  padding-bottom:40px;max-width:560px;margin:0 auto;width:100%;
+}
+h1{font-size:15px;font-weight:600;color:var(--sub);margin:0;text-align:center;letter-spacing:2px}
+.card{background:var(--card);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:11px}
+.card-title{font-size:13px;color:var(--sub);font-weight:600;letter-spacing:1px}
+label{font-size:13.5px;color:var(--sub)}
+.row{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.row .val{font-size:13px;color:var(--accent);font-variant-numeric:tabular-nums;min-width:40px;text-align:right;font-weight:700}
+input[type=range]{
+  flex:1;-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:#2a2f3a;outline:none;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;
+  background:var(--accent);cursor:pointer;border:3px solid var(--card);
+}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:pointer;border:3px solid var(--card)}
+.pwd-box{
+  background:var(--input);border:1px solid var(--line);border-radius:12px;
+  padding:16px 14px;text-align:center;font-family:ui-monospace,Consolas,"Cascadia Code",monospace;
+  font-size:21px;font-weight:700;letter-spacing:.5px;word-break:break-all;line-height:1.55;
+  min-height:64px;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  transition:border-color .2s;user-select:all;
+}
+.pwd-box:hover{border-color:var(--accent)}
+.strength{display:flex;align-items:center;gap:10px}
+.bars{display:flex;gap:4px;flex:1}
+.bar{height:6px;flex:1;border-radius:3px;background:#2a2f3a;transition:.3s}
+.bar.on1{background:var(--err)}
+.bar.on2{background:var(--warn)}
+.bar.on3{background:#ffd34d}
+.bar.on4{background:var(--ok)}
+.bar.on5{background:#00e676}
+.strength-text{font-size:12.5px;font-weight:700;min-width:64px;text-align:right}
+.strength-sub{font-size:11.5px;color:#6b7280}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.check{
+  display:flex;align-items:center;gap:8px;padding:10px 11px;border-radius:10px;
+  background:var(--input);border:1px solid var(--line);cursor:pointer;font-size:13.5px;
+  color:var(--fg);transition:.15s;user-select:none;
+}
+.check:hover{border-color:#3a4150}
+.check.on{border-color:var(--accent);background:rgba(76,141,255,.08)}
+.check input{display:none}
+.check .box{
+  width:16px;height:16px;border-radius:4px;border:1.5px solid #4a5265;flex:0 0 16px;
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;transition:.15s;
+}
+.check.on .box{background:var(--accent);border-color:var(--accent);color:#fff}
+.check .sample{margin-left:auto;font-size:11px;color:#565e6c;font-family:monospace}
+.adv{display:flex;flex-direction:column;gap:10px}
+.inline-input{
+  background:var(--input);border:1px solid var(--line);color:var(--fg);border-radius:9px;
+  padding:9px 11px;font-size:13.5px;font-family:inherit;width:100%;
+}
+.inline-input:focus{outline:none;border-color:var(--accent)}
+.btns{display:flex;gap:10px}
+.btns button{
+  flex:1;padding:14px;border:0;border-radius:12px;font-size:15px;font-weight:700;
+  color:#fff;background:var(--accent);cursor:pointer;transition:.15s;font-family:inherit;
+}
+.btns button:active{transform:scale(.96)}
+.btns button.ghost{background:var(--line);color:var(--fg)}
+.batch{display:flex;flex-direction:column;gap:7px}
+.batch-item{
+  display:flex;align-items:center;gap:10px;background:var(--input);border:1px solid var(--line);
+  border-radius:9px;padding:9px 12px;cursor:pointer;transition:.15s;
+}
+.batch-item:hover{border-color:var(--accent)}
+.batch-item .txt{
+  flex:1;font-family:ui-monospace,Consolas,monospace;font-size:13.5px;
+  word-break:break-all;user-select:all;
+}
+.batch-item .cp{font-size:11.5px;color:var(--sub);flex:0 0 auto}
+.mode-tabs{display:flex;background:var(--input);border-radius:10px;padding:4px;gap:4px}
+.mode-tabs button{
+  flex:1;padding:9px;border:0;background:transparent;color:var(--sub);border-radius:7px;
+  font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;transition:.2s;
+}
+.mode-tabs button.active{background:var(--accent);color:#fff}
+.status{font-size:12.5px;min-height:17px;color:#6b7280}
+.status.ok{color:var(--ok)}
+.hint{font-size:12px;color:#6b7280;line-height:1.7}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<h1>密 码 生 成 器</h1>
+
+<div class="card">
+  <div class="card-title">生成结果（点击可选中）</div>
+  <div class="pwd-box" id="pwdBox" title="点击选中">—</div>
+  <div class="strength">
+    <div class="bars" id="bars">
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+    </div>
+    <div class="strength-text" id="strengthText">—</div>
+  </div>
+  <div class="strength-sub" id="strengthSub">使用加密安全随机数生成，不联网</div>
+  <div class="btns">
+    <button id="btnCopy">复制</button>
+    <button id="btnGen">换一个</button>
+  </div>
+  <div class="status" id="status"></div>
+</div>
+
+<div class="card">
+  <div class="mode-tabs">
+    <button id="modeRandom" class="active">随机字符</button>
+    <button id="modePass">密码短语</button>
+  </div>
+
+  <!-- 随机字符设置 -->
+  <div id="optsRandom">
+    <div class="row" style="margin-bottom:11px">
+      <label>长度</label>
+      <input type="range" id="length" min="4" max="64" value="16">
+      <span class="val" id="lengthVal">16</span>
+    </div>
+    <div class="checks">
+      <label class="check on" data-k="lower"><input type="checkbox" checked><span class="box">✓</span>小写字母<span class="sample">a-z</span></label>
+      <label class="check on" data-k="upper"><input type="checkbox" checked><span class="box">✓</span>大写字母<span class="sample">A-Z</span></label>
+      <label class="check on" data-k="digit"><input type="checkbox" checked><span class="box">✓</span>数字<span class="sample">0-9</span></label>
+      <label class="check on" data-k="symbol"><input type="checkbox" checked><span class="box">✓</span>符号<span class="sample">!@#…</span></label>
+    </div>
+  </div>
+
+  <!-- 短语设置 -->
+  <div id="optsPass" class="hidden">
+    <div class="row" style="margin-bottom:11px">
+      <label>单词数量</label>
+      <input type="range" id="words" min="3" max="8" value="4">
+      <span class="val" id="wordsVal">4</span>
+    </div>
+    <div class="row" style="margin-bottom:11px">
+      <label>分隔符</label>
+      <select id="sep" class="inline-input" style="width:auto">
+        <option value="-">短横 -</option>
+        <option value=".">点 .</option>
+        <option value="_">下划线 _</option>
+        <option value=" ">空格</option>
+        <option value="">无（直接拼接）</option>
+      </select>
+    </div>
+    <div class="checks">
+      <label class="check on" data-k="cap"><input type="checkbox" checked><span class="box">✓</span>首字母大写</label>
+      <label class="check on" data-k="numtail"><input type="checkbox" checked><span class="box">✓</span>末尾加数字</label>
+    </div>
+  </div>
+
+  <div class="adv">
+    <label class="check" id="chkSimilar" style="width:fit-content"><input type="checkbox"><span class="box">✓</span>排除易混淆字符（O 0 l I 1）</label>
+    <input type="text" class="inline-input" id="exclude" placeholder="额外排除的字符，例如 @_">
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">批量生成</div>
+  <div class="batch" id="batch"></div>
+  <div class="btns">
+    <button id="btnBatch" class="ghost">生成 5 个</button>
+  </div>
+</div>
+
+<div class="hint">
+· 随机数来自浏览器加密安全接口（crypto.getRandomValues），适合生成账号密码。<br>
+· 密码短语由内置常用英文词组成，"正确拼写的大词"往往比乱码更好记也更难猜。<br>
+· 强度按信息熵估算（池大小 × 长度），仅供参考；任何密码都建议配合两步验证。
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var el = {
+    pwdBox: $('pwdBox'), bars: $('bars'), strengthText: $('strengthText'), strengthSub: $('strengthSub'),
+    btnCopy: $('btnCopy'), btnGen: $('btnGen'), status: $('status'),
+    modeRandom: $('modeRandom'), modePass: $('modePass'),
+    optsRandom: $('optsRandom'), optsPass: $('optsPass'),
+    length: $('length'), lengthVal: $('lengthVal'),
+    words: $('words'), wordsVal: $('wordsVal'), sep: $('sep'),
+    chkSimilar: $('chkSimilar'), exclude: $('exclude'),
+    batch: $('batch'), btnBatch: $('btnBatch')
+  };
+
+  var mode = 'random';
+
+  var SETS = {
+    lower: 'abcdefghijklmnopqrstuvwxyz',
+    upper: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    digit: '0123456789',
+    symbol: '!@#$%^&*()-_=+[]{};:,.<>?/~`"|\\'
+  };
+  var SIMILAR = 'O0oIl1';
+
+  var PHRASE_WORDS = [
+    'apple','river','cloud','tiger','eagle','stone','flame','ocean','mount','forest',
+    'night','storm','light','dream','spark','green','brown','quick','magic','pixel',
+    'dragon','phoenix','silver','golden','amber','coral','maple','cedar','willow','falcon',
+    'comet','orbit','lunar','solar','atlas','nova','echo','pulse','quartz','crystal',
+    'breeze','thunder','meadow','canyon','harbor','island','glacier','prairie','summit','valley',
+    'brave','smart','happy','sunny','cozy','wild','pure','keen','wise','calm',
+    'book','music','garden','candle','pocket','blanket','window','mirror','ladder','anchor',
+    'cookie','pepper','honey','coffee','melon','peach','berry','cocoa','ginger','vanilla'
+  ];
+
+  // ---------- 加密安全随机 ----------
+  function randInt(max){
+    if (max <= 0) return 0;
+    var arr = new Uint32Array(1);
+    var limit = Math.floor(4294967296 / max) * max;
+    var v;
+    do { crypto.getRandomValues(arr); v = arr[0]; } while (v >= limit);
+    return v % max;
+  }
+  function pick(str){ return str.charAt(randInt(str.length)); }
+
+  // ---------- 检查框 ----------
+  function bindCheck(node, onChange){
+    node.addEventListener('click', function(e){
+      e.preventDefault();
+      var cb = node.querySelector('input');
+      cb.checked = !cb.checked;
+      node.classList.toggle('on', cb.checked);
+      if (onChange) onChange();
+    });
+  }
+  document.querySelectorAll('.check[data-k]').forEach(function(c){
+    bindCheck(c, function(){ generate(); });
+  });
+  bindCheck(el.chkSimilar, function(){ generate(); });
+
+  // ---------- 生成 ----------
+  function activeSets(){
+    var out = '';
+    document.querySelectorAll('.check[data-k]').forEach(function(c){
+      var k = c.getAttribute('data-k');
+      if (!SETS[k]) return;                       // 短语模式的 cap/numtail 无字符集
+      if (c.querySelector('input').checked) out += SETS[k];
+    });
+    return out;
+  }
+  function filtered(pool){
+    if (el.chkSimilar.querySelector('input').checked){
+      pool = pool.split('').filter(function(ch){ return SIMILAR.indexOf(ch) < 0; }).join('');
+    }
+    var ex = el.exclude.value;
+    if (ex) pool = pool.split('').filter(function(ch){ return ex.indexOf(ch) < 0; }).join('');
+    return pool;
+  }
+
+  function genRandom(){
+    var pool = filtered(activeSets());
+    if (!pool){ setStatus('至少勾选一种字符类型'); return null; }
+    var len = parseInt(el.length.value, 10);
+    if (len < 4) len = 4;
+
+    // 保证每种勾选的字符集至少出现一次
+    var required = '';
+    document.querySelectorAll('.check[data-k]').forEach(function(c){
+      var k = c.getAttribute('data-k');
+      if (SETS[k] && c.querySelector('input').checked){
+        var s = filtered(SETS[k]);
+        if (s) required += pick(s);
+      }
+    });
+    var chars = required;
+    while (chars.length < len) chars += pick(pool);
+    chars = chars.split('');
+    // 洗牌（Fisher–Yates，加密随机）
+    for (var i = chars.length - 1; i > 0; i--){
+      var j = randInt(i + 1);
+      var t = chars[i]; chars[i] = chars[j]; chars[j] = t;
+    }
+    var pwd = chars.join('');
+    var poolSize = pool.length;
+    return { pwd: pwd, entropy: Math.log2(poolSize) * len, poolSize: poolSize, len: len };
+  }
+
+  function genPhrase(){
+    var n = parseInt(el.words.value, 10);
+    var sep = el.sep.value;
+    var cap = document.querySelector('.check[data-k=cap]').querySelector('input').checked;
+    var numtail = document.querySelector('.check[data-k=numtail]').querySelector('input').checked;
+    var parts = [];
+    for (var i = 0; i < n; i++){
+      var w = PHRASE_WORDS[randInt(PHRASE_WORDS.length)];
+      if (cap) w = w.charAt(0).toUpperCase() + w.slice(1);
+      parts.push(w);
+    }
+    var pwd = parts.join(sep);
+    if (numtail) pwd += sep + String(randInt(90) + 10);
+    // 熵：词表信息量 × 词数 (+ 数字)
+    var entropy = Math.log2(PHRASE_WORDS.length) * n + (numtail ? Math.log2(90) : 0);
+    return { pwd: pwd, entropy: entropy, poolSize: PHRASE_WORDS.length + ' 词', len: pwd.length };
+  }
+
+  function rateInfo(bits){
+    if (bits < 28) return { text: '很弱', cls: 1, sub: '容易被暴力猜出' };
+    if (bits < 40) return { text: '弱', cls: 2, sub: '仅适合不重要的账号' };
+    if (bits < 60) return { text: '中等', cls: 3, sub: '日常账号基本够用' };
+    if (bits < 80) return { text: '强', cls: 4, sub: '常规手段难以攻破' };
+    return { text: '很强', cls: 5, sub: '离线破解也需要非常久' };
+  }
+
+  function setStatus(msg, ok){
+    el.status.textContent = msg;
+    el.status.className = 'status' + (ok ? ' ok' : '');
+  }
+
+  function renderStrength(bits){
+    var info = rateInfo(bits);
+    var bars = el.bars.querySelectorAll('.bar');
+    bars.forEach(function(b, i){
+      b.className = 'bar' + (i < info.cls ? ' on' + info.cls : '');
+    });
+    el.strengthText.textContent = info.text;
+    el.strengthText.style.color =
+      info.cls <= 1 ? 'var(--err)' : info.cls <= 3 ? 'var(--warn)' : 'var(--ok)';
+    el.strengthSub.textContent = '≈ ' + Math.round(bits) + ' bit 熵 · ' + info.sub;
+  }
+
+  var current = '';
+  function generate(){
+    var r = mode === 'random' ? genRandom() : genPhrase();
+    if (!r){ el.pwdBox.textContent = '—'; return; }
+    current = r.pwd;
+    el.pwdBox.textContent = r.pwd;
+    renderStrength(r.entropy);
+    setStatus('');
+  }
+
+  // ---------- 复制 ----------
+  function copyText(text, msg){
+    var done = function(){ setStatus('✓ ' + msg, true); };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){ fbCopy(text, done); });
+    } else fbCopy(text, done);
+  }
+  function fbCopy(text, done){
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); done(); }catch(e){}
+    document.body.removeChild(ta);
+  }
+
+  el.btnCopy.addEventListener('click', function(){
+    if (!current){ setStatus('先生成一个密码'); return; }
+    copyText(current, '已复制到剪贴板');
+  });
+  el.btnGen.addEventListener('click', generate);
+  el.pwdBox.addEventListener('click', function(){
+    var range = document.createRange();
+    range.selectNodeContents(el.pwdBox);
+    var sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(range);
+  });
+
+  // ---------- 模式切换 ----------
+  function setMode(m){
+    mode = m;
+    el.modeRandom.classList.toggle('active', m === 'random');
+    el.modePass.classList.toggle('active', m === 'pass');
+    el.optsRandom.classList.toggle('hidden', m !== 'random');
+    el.optsPass.classList.toggle('hidden', m !== 'pass');
+    generate();
+  }
+  el.modeRandom.addEventListener('click', function(){ setMode('random'); });
+  el.modePass.addEventListener('click', function(){ setMode('pass'); });
+
+  // ---------- 设置变更 ----------
+  el.length.addEventListener('input', function(){ el.lengthVal.textContent = this.value; generate(); });
+  el.words.addEventListener('input', function(){ el.wordsVal.textContent = this.value; generate(); });
+  el.sep.addEventListener('change', generate);
+  el.exclude.addEventListener('input', generate);
+
+  // ---------- 批量 ----------
+  el.btnBatch.addEventListener('click', function(){
+    el.batch.innerHTML = '';
+    for (var i = 0; i < 5; i++){
+      var r = mode === 'random' ? genRandom() : genPhrase();
+      if (!r) return;
+      var div = document.createElement('div');
+      div.className = 'batch-item';
+      div.innerHTML = '<span class="txt"></span><span class="cp">点击复制</span>';
+      div.querySelector('.txt').textContent = r.pwd;
+      (function(pwd){
+        div.addEventListener('click', function(){ copyText(pwd, '已复制：' + pwd); });
+      })(r.pwd);
+      el.batch.appendChild(div);
+    }
+    setStatus('点击任意一行即可复制', true);
+  });
+
+  generate();
+})();
+</script>
+
+</body>
+</html>

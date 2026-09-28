@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>二维码生成器</title>
+<style>
+:root{
+  --bg:#0f1115; --card:#1a1d24; --fg:#e8eaed; --sub:#9aa0a6;
+  --accent:#4c8dff; --warn:#ff9f43; --ok:#28c76f; --err:#ff6b6b;
+  --line:#2a2f3a; --input:#0b0d11;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  margin:0;padding:16px;background:var(--bg);color:var(--fg);
+  font-family:-apple-system,"PingFang SC","Noto Sans CJK SC",system-ui,sans-serif;
+  display:flex;flex-direction:column;gap:14px;min-height:100vh;
+  padding-bottom:40px;max-width:560px;margin:0 auto;width:100%;
+}
+h1{font-size:15px;font-weight:600;color:var(--sub);margin:0;text-align:center;letter-spacing:2px}
+.card{background:var(--card);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:11px}
+.card-title{font-size:13px;color:var(--sub);font-weight:600;letter-spacing:1px}
+label{font-size:13.5px;color:var(--sub)}
+textarea{
+  background:var(--input);border:1px solid var(--line);color:var(--fg);
+  border-radius:9px;padding:11px 12px;font-size:14.5px;font-family:inherit;
+  width:100%;resize:vertical;min-height:88px;line-height:1.6;
+}
+textarea:focus{outline:none;border-color:var(--accent)}
+.status{font-size:12.5px;min-height:17px;line-height:1.5}
+.status.error{color:var(--err)}
+.status.success{color:var(--ok)}
+.status.muted{color:#6b7280}
+.preview{
+  background:#fff;border-radius:14px;padding:18px;display:flex;align-items:center;
+  justify-content:center;min-height:220px;position:relative;
+}
+.preview canvas{max-width:100%;height:auto!important;image-rendering:pixelated;display:block}
+.preview .placeholder{color:#9aa0a6;font-size:13.5px;text-align:center}
+.row{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.row>label{flex:0 0 auto}
+.row .val{font-size:12.5px;color:var(--accent);font-variant-numeric:tabular-nums;min-width:44px;text-align:right}
+input[type=range]{
+  flex:1;-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;
+  background:#2a2f3a;outline:none;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;
+  background:var(--accent);cursor:pointer;border:3px solid var(--card);
+}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:pointer;border:3px solid var(--card)}
+select{
+  background:var(--input);border:1px solid var(--line);color:var(--fg);border-radius:9px;
+  padding:9px 10px;font-size:14px;font-family:inherit;
+}
+select:focus{outline:none;border-color:var(--accent)}
+.colors{display:flex;gap:14px}
+.color-item{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--sub)}
+input[type=color]{
+  width:40px;height:32px;border:1px solid var(--line);border-radius:8px;
+  background:var(--input);padding:2px;cursor:pointer;
+}
+.btns{display:flex;gap:10px}
+.btns button{
+  flex:1;padding:14px;border:0;border-radius:12px;font-size:15px;font-weight:700;
+  color:#fff;background:var(--accent);cursor:pointer;transition:.15s;font-family:inherit;
+}
+.btns button:active{transform:scale(.96)}
+.btns button.ghost{background:var(--line);color:var(--fg)}
+.btns button:disabled{opacity:.5;cursor:not-allowed}
+.hint{font-size:12px;color:#6b7280;line-height:1.7}
+.retry{
+  margin:0 auto;padding:8px 18px;border-radius:999px;border:1px solid var(--accent);
+  background:transparent;color:var(--accent);font-size:13px;cursor:pointer;font-family:inherit;
+}
+</style>
+</head>
+<body>
+
+<h1>二 维 码 生 成 器</h1>
+
+<div class="card">
+  <div class="card-title">内容（网址或文字）</div>
+  <textarea id="content" placeholder="粘贴网址、文字、WiFi 配置等，实时生成二维码"></textarea>
+  <div class="status muted" id="status">正在加载生成引擎…</div>
+</div>
+
+<div class="preview" id="preview">
+  <div class="placeholder" id="placeholder">二维码会显示在这里</div>
+</div>
+
+<div class="card">
+  <div class="row">
+    <label>下载尺寸</label>
+    <input type="range" id="size" min="256" max="1024" step="64" value="512">
+    <span class="val" id="sizeVal">512</span>
+  </div>
+  <div class="row">
+    <label>静区边距</label>
+    <input type="range" id="margin" min="0" max="80" step="8" value="32">
+    <span class="val" id="marginVal">32</span>
+  </div>
+  <div class="row">
+    <label>纠错级别</label>
+    <select id="level">
+      <option value="L">L（7%，更小）</option>
+      <option value="M" selected>M（15%，推荐）</option>
+      <option value="Q">Q（25%，较稳）</option>
+      <option value="H">H（30%，抗遮挡）</option>
+    </select>
+  </div>
+  <div class="colors">
+    <div class="color-item">前景 <input type="color" id="fg" value="#000000"></div>
+    <div class="color-item">背景 <input type="color" id="bg" value="#ffffff"></div>
+    <div class="color-item" style="margin-left:auto">
+      <button class="retry" id="btnReset" style="border-color:var(--line);color:var(--sub)">恢复默认</button>
+    </div>
+  </div>
+</div>
+
+<div class="btns">
+  <button id="btnDownload" disabled>下载 PNG</button>
+  <button id="btnCopy" class="ghost" disabled>复制图片</button>
+  <button id="btnClear" class="ghost">清空</button>
+</div>
+
+<div class="hint">
+· 输入内容即实时生成；扫码解析在本地完成，内容不会上传到服务器。<br>
+· 生成引擎（QR 编码库）从 CDN 加载，需联网一次；加载失败可点上方重试。<br>
+· 需要扫码进路由器/热点时建议纠错选 H，深色背景请确认前景色对比度足够。
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var el = {
+    content: $('content'), status: $('status'), preview: $('preview'), placeholder: $('placeholder'),
+    size: $('size'), sizeVal: $('sizeVal'), margin: $('margin'), marginVal: $('marginVal'),
+    level: $('level'), fg: $('fg'), bg: $('bg'),
+    btnDownload: $('btnDownload'), btnCopy: $('btnCopy'), btnClear: $('btnClear'), btnReset: $('btnReset')
+  };
+
+  // ---------- 引擎加载（多源兜底）----------
+  var SOURCES = [
+    { url: 'https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js', lib: 'QRious' },
+    { url: 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js', lib: 'QRCode' },
+    { url: 'https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@master/qrcode.min.js', lib: 'QRCode' }
+  ];
+  var engine = null;   // 'qrious' | 'qrcodejs' | null
+
+  function loadScript(url){
+    return new Promise(function(resolve, reject){
+      var s = document.createElement('script');
+      s.src = url; s.async = true;
+      s.onload = function(){ resolve(); };
+      s.onerror = function(){ s.remove(); reject(new Error('加载失败 ' + url)); };
+      document.head.appendChild(s);
+      setTimeout(function(){ if (!s.parentNode) return; }, 15000);
+    });
+  }
+
+  function tryLoad(idx){
+    if (idx >= SOURCES.length){
+      setStatus('生成引擎加载失败，请检查网络后重试', 'error');
+      var btn = document.createElement('button');
+      btn.className = 'retry'; btn.textContent = '重新加载引擎';
+      btn.addEventListener('click', function(){ btn.remove(); setStatus('正在加载生成引擎…'); tryLoad(0); });
+      if (!$('retryBtn')){
+        btn.id = 'retryBtn';
+        el.status.after(btn);
+      }
+      return;
+    }
+    var src = SOURCES[idx];
+    if (window[src.lib]){
+      engine = src.lib === 'QRious' ? 'qrious' : 'qrcodejs';
+      setStatus('引擎就绪');
+      generate();
+      return;
+    }
+    loadScript(src.url).then(function(){
+      if (window[src.lib]){
+        engine = src.lib === 'QRious' ? 'qrious' : 'qrcodejs';
+        setStatus('引擎就绪');
+        generate();
+      } else tryLoad(idx + 1);
+    }).catch(function(){ tryLoad(idx + 1); });
+  }
+
+  function setStatus(msg, cls){ el.status.textContent = msg; el.status.className = 'status ' + (cls || 'muted'); }
+
+  // ---------- 生成 ----------
+  // 统一流程：库生成原图（不含边距）→ 我们合成边距 → 展示/下载用同一张 canvas
+  var genTimer = null;
+
+  function renderCanvas(qrCanvas){
+    var size = parseInt(el.size.value, 10);
+    var m = parseInt(el.margin.value, 10);
+    var scale = size / (qrCanvas.width);   // 统一到所选分辨率
+    var inner = Math.round(size);
+    var total = inner + m * 2;
+
+    var out = document.createElement('canvas');
+    out.width = total; out.height = total;
+    var ctx = out.getContext('2d');
+    ctx.fillStyle = el.bg.value;
+    ctx.fillRect(0, 0, total, total);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(qrCanvas, m, m, inner, inner);
+
+    // 替换预览
+    var old = el.preview.querySelector('canvas');
+    if (old) old.remove();
+    el.placeholder.style.display = 'none';
+    out.style.width = 'min(320px, 72vw)';
+    el.preview.appendChild(out);
+
+    el.btnDownload.disabled = false;
+    el.btnCopy.disabled = false;
+  }
+
+  function generate(){
+    var text = el.content.value;
+    if (!engine){
+      if (el.status.textContent.indexOf('失败') < 0) setStatus('正在加载生成引擎…');
+      return;
+    }
+    if (!text){
+      var old = el.preview.querySelector('canvas');
+      if (old) old.remove();
+      el.placeholder.style.display = '';
+      el.btnDownload.disabled = true;
+      el.btnCopy.disabled = true;
+      setStatus('输入内容后生成', 'muted');
+      return;
+    }
+
+    var level = el.level.value;
+    var tmp = document.createElement('div');
+    tmp.style.position = 'fixed'; tmp.style.left = '-9999px';
+    document.body.appendChild(tmp);
+
+    try{
+      var qrCanvas;
+      if (engine === 'qrious'){
+        qrCanvas = document.createElement('canvas');
+        new QRious({
+          element: qrCanvas,
+          value: text,
+          size: 512,
+          level: level,
+          background: '#ffffff',
+          foreground: '#000000',
+          padding: 0
+        });
+      } else {
+        new QRCode(tmp, {
+          text: text,
+          width: 512, height: 512,
+          colorDark: '#000000',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel[level]
+        });
+        qrCanvas = tmp.querySelector('canvas');
+        if (!qrCanvas) throw new Error('生成失败');
+      }
+      renderCanvas(qrCanvas);
+      setStatus('✓ 已生成 · ' + text.length + ' 字符 · 纠错 ' + level, 'success');
+    }catch(e){
+      setStatus('生成失败：' + e.message + '（内容可能过长，二维码有容量上限）', 'error');
+    }finally{
+      tmp.remove();
+    }
+  }
+
+  function debounceGen(){ clearTimeout(genTimer); genTimer = setTimeout(generate, 350); }
+
+  // ---------- 事件 ----------
+  el.content.addEventListener('input', debounceGen);
+  el.size.addEventListener('input', function(){ el.sizeVal.textContent = this.value; debounceGen(); });
+  el.margin.addEventListener('input', function(){ el.marginVal.textContent = this.value; debounceGen(); });
+  el.level.addEventListener('change', generate);
+  el.fg.addEventListener('input', debounceGen);
+  el.bg.addEventListener('input', debounceGen);
+
+  el.btnReset.addEventListener('click', function(){
+    el.size.value = 512; el.sizeVal.textContent = '512';
+    el.margin.value = 32; el.marginVal.textContent = '32';
+    el.level.value = 'M';
+    el.fg.value = '#000000'; el.bg.value = '#ffffff';
+    generate();
+  });
+
+  el.btnClear.addEventListener('click', function(){
+    el.content.value = ''; generate(); el.content.focus();
+  });
+
+  el.btnDownload.addEventListener('click', function(){
+    var canvas = el.preview.querySelector('canvas');
+    if (!canvas) return;
+    var a = document.createElement('a');
+    a.download = 'qr-' + Date.now() + '.png';
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+    setStatus('✓ 已开始下载 PNG', 'success');
+  });
+
+  el.btnCopy.addEventListener('click', function(){
+    var canvas = el.preview.querySelector('canvas');
+    if (!canvas) return;
+    if (navigator.clipboard && window.ClipboardItem){
+      canvas.toBlob(function(blob){
+        navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+          .then(function(){ setStatus('✓ 图片已复制，可直接粘贴', 'success'); })
+          .catch(function(){ setStatus('复制失败（浏览器不支持或未授权）', 'error'); });
+      }, 'image/png');
+    } else {
+      setStatus('当前浏览器不支持复制图片，请用下载', 'error');
+    }
+  });
+
+  // 启动
+  tryLoad(0);
+})();
+</script>
+
+</body>
+</html>
