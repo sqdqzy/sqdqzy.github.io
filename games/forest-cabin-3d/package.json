@@ -1,0 +1,11 @@
+{
+  "name": "forest-cabin-3d",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "程序化生成的 3D 森林农村小屋网页场景（three.js，零外部素材）",
+  "scripts": {
+    "start": "node serve.mjs",
+    "check": "node --check src/core.js && node --check src/main.js && node --check src/terrain.js && node --check src/forest.js && node --check src/cabin.js && node --check src/props.js && node --check src/sky.js && node --check src/particles.js && node --check src/postfx.js && node --check src/ui.js"
+  }
+}

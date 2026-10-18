@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>森林乡村小屋 3D场景（无外部控制器）</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;background:#0a1014;font-family:system-ui}
+canvas{display:block;width:100vw;height:100vh}
+#ui{position:fixed;top:16px;left:16px;color:#fff;padding:12px;background:rgba(0,0,0,0.35);border-radius:10px;backdrop-filter:blur(4px)}
+#ui h3{margin-bottom:6px;font-size:16px}
+#ui p{font-size:13px;opacity:0.9;line-height:1.4}
+#tip{position:fixed;top:80px;left:16px;color:#77ff99;background:rgba(0,0,0,0.4);padding:8px;border-radius:6px;font-size:12px}
+</style>
+</head>
+<body>
+<div id="ui">
+<h3>🌲 森林小屋场景</h3>
+<p>鼠标拖拽旋转视角 | 滚轮缩放</p>
+<p>按 T 切换白天/黄昏电影光影</p>
+</div>
+<div id="tip">正在加载Three.js...</div>
+
+<!-- 只引入three本体，不再引入OrbitControls！本地化，不依赖外部 CDN -->
+<script src="vendor/three.min.js"></script>
+
+<script>
+const tipDom = document.getElementById('tip');
+if(!window.THREE){
+  tipDom.textContent = "❌ Three.js加载失败，网络问题";
+}else{
+  tipDom.textContent = "✅ 加载成功！";
+}
+
+// ========= 初始化场景 =========
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x88a8b8);
+scene.fog = new THREE.FogExp2(0x94b2c2, 0.012);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+const target = new THREE.Vector3(0,2,0); // 相机看向小屋中心
+let radius = 22;
+let theta = Math.PI / 4;
+let phi = Math.PI / 3.2;
+
+// 手写简易轨道相机参数
+let isDrag = false;
+let lastX = 0, lastY = 0;
+const dom = document.querySelector("canvas");
+
+function updateCamera(){
+  camera.position.x = target.x + radius * Math.sin(phi) * Math.cos(theta);
+  camera.position.y = target.y + radius * Math.cos(phi);
+  camera.position.z = target.z + radius * Math.sin(phi) * Math.sin(theta);
+  camera.lookAt(target);
+}
+
+// 鼠标拖拽事件
+document.addEventListener('mousedown',e=>{isDrag=true; lastX=e.clientX;lastY=e.clientY;})
+document.addEventListener('mouseup',()=>isDrag=false);
+document.addEventListener('mousemove',e=>{
+  if(!isDrag) return;
+  const dx = e.clientX - lastX;
+  const dy = e.clientY - lastY;
+  theta -= dx * 0.005;
+  phi -= dy * 0.005;
+  phi = Math.max(0.2, Math.min(Math.PI/2-0.05, phi)); // 限制上下视角，不钻地下
+  lastX = e.clientX; lastY = e.clientY;
+})
+// 滚轮缩放
+document.addEventListener('wheel',e=>{
+  e.preventDefault();
+  radius += e.deltaY * 0.01;
+  radius = Math.max(8, Math.min(60, radius));
+},{passive:false})
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.85;
+document.body.appendChild(renderer.domElement);
+
+// ========= 灯光系统 =========
+const ambientLight = new THREE.AmbientLight(0xfff8e8, 0.32);
+scene.add(ambientLight);
+
+const sunLight = new THREE.DirectionalLight(0xfff2dd, 1.1);
+sunLight.position.set(22, 24, 12);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048,2048);
+sunLight.shadow.camera.left = -30;
+sunLight.shadow.camera.right =30;
+sunLight.shadow.camera.top=30;
+sunLight.shadow.camera.bottom=-30;
+scene.add(sunLight);
+
+let isDay = true;
+window.addEventListener('keydown',e=>{
+  if(e.key.toLowerCase()==='t'){
+    isDay = !isDay;
+    if(isDay){
+      scene.background.set(0x88a8b8);
+      scene.fog.color.set(0x94b2c2);
+      sunLight.color.set(0xfff2dd);
+      sunLight.intensity = 1.1;
+      ambientLight.intensity =0.32;
+      renderer.toneMappingExposure=0.85;
+    }else{
+      scene.background.set(0x403842);
+      scene.fog.color.set(0x544856);
+      sunLight.color.set(0xffb878);
+      sunLight.intensity =0.45;
+      ambientLight.intensity =0.14;
+      renderer.toneMappingExposure=0.65;
+    }
+  }
+})
+
+// ========= 地面草地 =========
+const groundGeo = new THREE.PlaneGeometry(120,120);
+const groundMat = new THREE.MeshLambertMaterial({color:0x4b7038});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ========= 小屋主体 =========
+const houseGroup = new THREE.Group();
+houseGroup.position.set(0,0,0);
+scene.add(houseGroup);
+
+// 屋身
+const wallGeo = new THREE.BoxGeometry(6,3.4,4.8);
+const wallMat = new THREE.MeshLambertMaterial({color:0x927258});
+const walls = new THREE.Mesh(wallGeo, wallMat);
+walls.position.y = 1.7;
+walls.castShadow=true;
+walls.receiveShadow=true;
+houseGroup.add(walls);
+
+// 屋顶三角
+const roofGeo = new THREE.ConeGeometry(5.2,2.6,4);
+const roofMat = new THREE.MeshLambertMaterial({color:0x594232});
+const roof = new THREE.Mesh(roofGeo, roofMat);
+roof.position.y = 3.4+1.3;
+roof.rotation.y = Math.PI/4;
+roof.castShadow=true;
+houseGroup.add(roof);
+
+// 木门
+const doorGeo = new THREE.BoxGeometry(1.4,2.2,0.2);
+const doorMat = new THREE.MeshLambertMaterial({color:0x4a3424});
+const door = new THREE.Mesh(doorGeo, doorMat);
+door.position.set(0,1.1,2.41);
+door.castShadow=true;
+houseGroup.add(door);
+
+// 窗户
+function makeWindow(x,z){
+  const winFrame = new THREE.BoxGeometry(1.2,1,0.15);
+  const winMat = new THREE.MeshLambertMaterial({color:0x2c221b});
+  const w = new THREE.Mesh(winFrame,winMat);
+  w.position.set(x,2,z);
+  w.castShadow=true;
+  houseGroup.add(w);
+}
+makeWindow(-2,2.41);
+makeWindow(2,2.41);
+
+// 台阶
+const stepGeo = new THREE.BoxGeometry(2.2,0.3,1.4);
+const stepMat = new THREE.MeshLambertMaterial({color:0x6b5442});
+const step = new THREE.Mesh(stepGeo,stepMat);
+step.position.set(0,0.15,3.4);
+step.castShadow=true;
+step.receiveShadow=true;
+houseGroup.add(step);
+
+// ========= 树木生成函数 =========
+function createTree(x,z,scale=1){
+  const treeGrp = new THREE.Group();
+  treeGrp.position.set(x,0,z);
+
+  //树干
+  const trunkGeo = new THREE.CylinderGeometry(0.35*scale,0.5*scale,4.2*scale,8);
+  const trunkMat = new THREE.MeshLambertMaterial({color:0x5a4430});
+  const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+  trunk.position.y = 2.1*scale;
+  trunk.castShadow=true;
+  trunk.receiveShadow=true;
+  treeGrp.add(trunk);
+
+  //树冠多层
+  const crownMat = new THREE.MeshLambertMaterial({color:0x386b32});
+  for(let i=0;i<3;i++){
+    const r = (2.2 - i*0.45)*scale;
+    const h = (2.6 - i*0.4)*scale;
+    const crownGeo = new THREE.ConeGeometry(r,h,8);
+    const crown = new THREE.Mesh(crownGeo,crownMat);
+    crown.position.y = (4.2 + i*1.6)*scale;
+    crown.castShadow=true;
+    treeGrp.add(crown);
+  }
+  scene.add(treeGrp);
+  return treeGrp;
+}
+
+// 批量放置森林树木
+const trees = [];
+trees.push(createTree(-9, 6, 1.1));
+trees.push(createTree(-10,-4,0.9));
+trees.push(createTree(8,-7,1.2));
+trees.push(createTree(11,4,0.95));
+trees.push(createTree(-3,-10,1.05));
+trees.push(createTree(7,9,1.15));
+trees.push(createTree(-12,0,1));
+trees.push(createTree(4,-12,0.88));
+trees.push(createTree(-6,-6,1.02));
+trees.push(createTree(10,-2,0.9));
+trees.push(createTree(-8,10,1.1));
+trees.push(createTree(2,10,0.92));
+
+// 小岩石装饰
+function rock(x,z,s){
+  const g = new THREE.SphereGeometry(s,6,5);
+  const m = new THREE.MeshLambertMaterial({color:0x666666});
+  const mesh = new THREE.Mesh(g,m);
+  mesh.position.set(x,s*0.6,z);
+  mesh.scale.y = 0.55;
+  mesh.castShadow=true;
+  mesh.receiveShadow=true;
+  scene.add(mesh);
+}
+rock(-4,5,0.7);
+rock(5,-5,0.5);
+rock(-7,-2,0.6);
+
+// ========= 动画循环 =========
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+  //树叶微风摆动
+  trees.forEach((tree,idx)=>{
+    tree.rotation.z = Math.sin(t*0.7 + idx)*0.022;
+  })
+  updateCamera();
+  renderer.render(scene,camera);
+}
+
+//窗口自适应
+window.addEventListener('resize',()=>{
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+})
+
+animate();
+</script>
+</body>
+</html>
+<!-- （注：内容由AI生成） -->

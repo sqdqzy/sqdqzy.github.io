@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="description" content="森林木屋 — 程序化生成的 3D 森林小屋电影质感场景">
+<title>森林木屋 · Woodland Cabin</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<canvas id="view"></canvas>
+
+<!-- 载入画面 -->
+<div id="loader">
+  <div class="l-inner">
+    <div class="l-mark">
+      <svg viewBox="0 0 64 40" aria-hidden="true">
+        <path d="M4 34 L32 8 L60 34" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M12 34 L12 22 L52 22 L52 34" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <rect x="27" y="26" width="10" height="8" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      </svg>
+    </div>
+    <h1 class="l-title">森 林 木 屋</h1>
+    <div class="l-sub">WOODLAND&nbsp;CABIN &nbsp;·&nbsp; procedural webgl</div>
+    <div class="l-bar"><i id="l-fill"></i></div>
+    <div class="l-status" id="l-status">正在唤醒显卡…</div>
+  </div>
+</div>
+
+<!-- 界面 -->
+<div id="hud">
+  <header id="titleblock">
+    <div class="t-rule"></div>
+    <h1>森林木屋</h1>
+    <p>WOODLAND CABIN<span class="dot">·</span>程序化生成的三维森林小屋</p>
+  </header>
+
+  <aside id="panel">
+    <button id="panel-toggle" title="收起/展开面板">≡</button>
+    <div class="p-body">
+
+      <section>
+        <div class="row-head"><label for="c-hour">时刻</label><span class="val" id="v-hour">18:20</span></div>
+        <input id="c-hour" type="range" min="0" max="24" step="0.05" value="18.3">
+        <div class="ticks"><span>午夜</span><span>黎明</span><span>正午</span><span>黄昏</span><span>深夜</span></div>
+      </section>
+
+      <section>
+        <div class="row-head"><label>运镜</label></div>
+        <div class="seg" id="c-mode">
+          <button data-mode="cinematic" class="on">电影运镜<em>1</em></button>
+          <button data-mode="orbit">自由环绕<em>2</em></button>
+          <button data-mode="walk">林间漫步<em>3</em></button>
+        </div>
+        <div class="row-head sub"><label for="c-shot">切换镜头</label><span class="val" id="v-shot">establishing</span></div>
+        <button id="c-shot" class="wide">下一个镜头 &nbsp;·&nbsp; N</button>
+      </section>
+
+      <section>
+        <div class="row-head"><label for="c-quality">画质</label><span class="val" id="v-quality">自动</span></div>
+        <div class="seg small" id="c-quality">
+          <button data-q="low">低</button>
+          <button data-q="medium">中</button>
+          <button data-q="high">高</button>
+          <button data-q="ultra">极致</button>
+        </div>
+      </section>
+
+      <section class="adv">
+        <div class="row-head"><label for="c-exposure">曝光</label><span class="val" id="v-exposure">1.00</span></div>
+        <input id="c-exposure" type="range" min="0.3" max="2.2" step="0.01" value="1">
+        <div class="row-head"><label for="c-bloom">泛光</label><span class="val" id="v-bloom">0.55</span></div>
+        <input id="c-bloom" type="range" min="0" max="2" step="0.01" value="0.55">
+        <div class="row-head"><label for="c-grain">胶片颗粒</label><span class="val" id="v-grain">0.05</span></div>
+        <input id="c-grain" type="range" min="0" max="0.2" step="0.002" value="0.05">
+        <div class="row-head"><label for="c-vig">暗角</label><span class="val" id="v-vig">0.85</span></div>
+        <input id="c-vig" type="range" min="0" max="1.6" step="0.01" value="0.85">
+        <div class="row-head"><label for="c-fog">雾气</label><span class="val" id="v-fog">1.00</span></div>
+        <input id="c-fog" type="range" min="0" max="2.2" step="0.01" value="1">
+        <div class="row-head"><label for="c-shafts">光束</label><span class="val" id="v-shafts">1.00</span></div>
+        <input id="c-shafts" type="range" min="0" max="1.6" step="0.01" value="1">
+        <div class="row-head"><label for="c-sat">饱和度</label><span class="val" id="v-sat">1.06</span></div>
+        <input id="c-sat" type="range" min="0.4" max="1.8" step="0.01" value="1.06">
+      </section>
+
+      <section>
+        <div class="row-head"><label for="c-vol">环境音</label><span class="val" id="v-vol">60%</span></div>
+        <input id="c-vol" type="range" min="0" max="1" step="0.01" value="0.6">
+        <button id="c-sound" class="wide">开启声音 &nbsp;·&nbsp; 浏览器需要点击授权</button>
+      </section>
+
+      <section class="keys">
+        <div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 运镜</div>
+        <div><kbd>N</kbd> 换镜头 &nbsp; <kbd>[</kbd><kbd>]</kbd> 时间</div>
+        <div><kbd>H</kbd> 隐藏界面 &nbsp; <kbd>F</kbd> 全屏 &nbsp; <kbd>Space</kbd> 暂停</div>
+      </section>
+
+      <div id="stats">—</div>
+    </div>
+  </aside>
+
+  <footer id="hints">
+    <span id="shotname">establishing</span>
+    <span class="sep">·</span>
+    <span id="modename">电影运镜</span>
+    <span class="sep">·</span>
+    <span id="fps">– fps</span>
+  </footer>
+
+  <div id="soundhint" class="hidden">🔊 点击画面开启森林环境音</div>
+</div>
+
+<div id="error" class="hidden"><div class="e-inner"><h2>无法启动</h2><pre id="error-msg"></pre></div></div>
+
+<script src="vendor/three.min.js"></script>
+<script>
+  // three.js 已随仓库本地化（vendor/three.min.js），不再依赖外部 CDN。
+  // 仅当本地文件缺失时才回退，避免离线/内网环境下白屏。
+  if (!window.THREE) {
+    document.write('<script src="https://unpkg.com/three@0.149.0/build/three.min.js"><\/script>');
+  }
+</script>
+<script src="js/util.js"></script>
+<script src="js/textures.js"></script>
+<script src="js/sky.js"></script>
+<script src="js/lighting.js"></script>
+<script src="js/terrain.js"></script>
+<script src="js/vegetation.js"></script>
+<script src="js/cabin.js"></script>
+<script src="js/props.js"></script>
+<script src="js/atmosphere.js"></script>
+<script src="js/post.js"></script>
+<script src="js/controls.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "forest-cabin-film",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "程序化生成的 3D 森林农舍网页场景（three.js，零外部素材）",
+  "scripts": {
+    "start": "node serve.mjs 8124",
+    "check": "node --check src/core.js && node --check src/sky.js && node --check src/terrain.js && node --check src/forest.js && node --check src/cabin.js && node --check src/props.js && node --check src/atmos.js && node --check src/post.js && node --check src/ui.js && node --check src/main.js"
+  }
+}

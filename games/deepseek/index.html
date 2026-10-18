@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>林间小屋 · Forest Cabin</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #0d1016;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  #scene { display: block; width: 100%; height: 100%; }
+
+  /* 电影感暗角 */
+  .vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 2;
+    background: radial-gradient(ellipse at 50% 45%,
+                rgba(0,0,0,0) 45%,
+                rgba(0,0,0,0.22) 78%,
+                rgba(0,0,0,0.55) 100%);
+  }
+  /* 胶片颗粒 */
+  .grain {
+    position: fixed; inset: -50%; pointer-events: none; z-index: 3;
+    opacity: 0.055;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation: grainShift 0.9s steps(3) infinite;
+  }
+  @keyframes grainShift {
+    0%   { transform: translate(0, 0); }
+    33%  { transform: translate(-2%, 1.5%); }
+    66%  { transform: translate(1.5%, -1%); }
+    100% { transform: translate(0, 0); }
+  }
+
+  /* 提示 */
+  .hint {
+    position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%);
+    z-index: 4; pointer-events: none;
+    color: rgba(255, 235, 215, 0.62);
+    font-size: 13px; letter-spacing: 0.28em;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.9);
+    animation: hintFade 1s ease 1.2s both;
+    white-space: nowrap;
+  }
+  @keyframes hintFade { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+  /* 标题 */
+  .title {
+    position: fixed; left: 46px; top: 40px; z-index: 4; pointer-events: none;
+    animation: hintFade 1.4s ease 0.5s both;
+  }
+  .title h1 {
+    font-size: 22px; font-weight: 300; letter-spacing: 0.42em;
+    color: rgba(255, 240, 224, 0.88);
+    text-shadow: 0 4px 24px rgba(0,0,0,0.8);
+  }
+  .title p {
+    margin-top: 10px; font-size: 11px; letter-spacing: 0.34em;
+    color: rgba(255, 214, 176, 0.45);
+  }
+
+  /* 开场黑幕淡出 */
+  .curtain {
+    position: fixed; inset: 0; background: #0a0c10; z-index: 10;
+    pointer-events: none; transition: opacity 2.4s ease 0.15s;
+  }
+  .curtain.gone { opacity: 0; }
+
+  @media (max-width: 700px) {
+    .title { left: 22px; top: 24px; }
+    .title h1 { font-size: 16px; letter-spacing: 0.3em; }
+    .hint { font-size: 11px; letter-spacing: 0.18em; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+<div class="vignette"></div>
+<div class="grain"></div>
+
+<div class="title">
+  <h1>林间小屋</h1>
+  <p>FOREST CABIN · DUSK</p>
+</div>
+
+<div class="hint">拖动旋转 · 滚轮缩放</div>
+<div class="curtain" id="curtain"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+/* ============================================================
+   0. 基础工具
+============================================================ */
+const rand  = (a, b) => a + Math.random() * (b - a);
+const randI = (a, b) => Math.floor(rand(a, b + 1));
+
+/** 地形高度：中心平坦，向外起伏 */
+function terrainHeight(x, z) {
+  const d = Math.hypot(x, z);
+  const flat = THREE.MathUtils.smoothstep(d, 7.5, 22);
+  const n =
+    Math.sin(x * 0.075 + 1.3) * Math.cos(z * 0.068 + 0.4) * 1.55 +
+    Math.sin(x * 0.19 + 0.5)  * Math.cos(z * 0.175 + 2.2) * 0.62 +
+    Math.sin(x * 0.52 + 3.1)  * Math.cos(z * 0.47 + 1.2)  * 0.20;
+  return n * flat;
+}
+
+/** 生成柔和径向渐变贴图 */
+function makeSoftTexture(size = 128, mid = 0.45) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0,    'rgba(255,255,255,1)');
+  g.addColorStop(mid,  'rgba(255,255,255,0.42)');
+  g.addColorStop(1,    'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/* ============================================================
+   1. 渲染器 / 场景 / 相机
+============================================================ */
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.02;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+const FOG_COLOR = 0xc39a83;
+scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0135);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 700);
+camera.position.set(14.5, 7.2, 15.5);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 2.35, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.055;
+controls.enablePan = false;
+controls.minDistance = 9;
+controls.maxDistance = 46;
+controls.minPolarAngle = Math.PI * 0.14;
+controls.maxPolarAngle = Math.PI * 0.475;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.22;
+controls.rotateSpeed = 0.6;
+controls.zoomSpeed = 0.7;
+
+/* ============================================================
+   2. 天空穹顶
+============================================================ */
+{
+  const skyGeo = new THREE.SphereGeometry(420, 32, 24);
+  const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    uniforms: {
+      uTop: { value: new THREE.Color('#1b2542') },
+      uMid: { value: new THREE.Color('#8f9ab4') },
+      uBot: { value: new THREE.Color('#e3a87f') },
+    },
+    vertexShader: /* glsl */`
+      varying vec3 vPos;
+      void main() {
+        vPos = position;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */`
+      uniform vec3 uTop, uMid, uBot;
+      varying vec3 vPos;
+      void main() {
+        float h = normalize(vPos).y;
+        vec3 col = mix(uBot, uMid, smoothstep(-0.04, 0.26, h));
+        col = mix(col, uTop, smoothstep(0.20, 0.82, h));
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `
+  });
+  scene.add(new THREE.Mesh(skyGeo, skyMat));
+}
+
+/* ============================================================
+   3. 光照
+============================================================ */
+// 夕阳主光
+const sun = new THREE.DirectionalLight(0xffb277, 3.0);
+sun.position.set(40, 15, 30);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left   = -42;
+sun.shadow.camera.right  =  42;
+sun.shadow.camera.top    =  42;
+sun.shadow.camera.bottom = -42;
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far  = 180;
+sun.shadow.bias = -0.0009;
+sun.shadow.normalBias = 0.028;
+scene.add(sun);
+scene.add(sun.target);
+
+// 天空 / 地面环境光
+const hemi = new THREE.HemisphereLight(0x9db9e8, 0x3d2c1b, 0.72);
+scene.add(hemi);
+
+// 冷色补光（从反方向打来，制造层次）
+const fill = new THREE.DirectionalLight(0x6b86c4, 0.45);
+fill.position.set(-28, 16, -22);
+scene.add(fill);
+
+/* 太阳光晕 */
+{
+  const glowTex = makeSoftTexture(256, 0.32);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTex, color: 0xffc890, transparent: true, opacity: 0.85,
+    blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false
+  }));
+  glow.position.set(200, 72, 150);
+  glow.scale.setScalar(120);
+  scene.add(glow);
+
+  const core = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTex, color: 0xfff0d0, transparent: true, opacity: 0.95,
+    blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false
+  }));
+  core.position.copy(glow.position);
+  core.scale.setScalar(34);
+  scene.add(core);
+}
+
+/* ============================================================
+   4. 地形
+============================================================ */
+{
+  const SIZE = 320, SEG = 200;
+  const geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
+  geo.rotateX(-Math.PI / 2);
+
+  const pos = geo.attributes.position.array;
+  const colors = new Float32Array(pos.length);
+
+  const cDark = new THREE.Color('#31401e');
+  const cLite = new THREE.Color('#5b6d36');
+  const cDirt = new THREE.Color('#6d5636');
+  const tmp = new THREE.Color();
+
+  for (let i = 0; i < pos.length; i += 3) {
+    const x = pos[i], z = pos[i + 2];
+    pos[i + 1] = terrainHeight(x, z);
+
+    const n1 = (Math.sin(x * 0.19) * Math.cos(z * 0.17)
+              + Math.sin(x * 0.066 + 1.2) * Math.cos(z * 0.083 + 2.1) + 2) / 4;
+    const n2 = (Math.sin(x * 0.87 + 2.0) * Math.cos(z * 0.82 + 1.0) + 1) / 2;
+
+    tmp.copy(cDark).lerp(cLite, n1).lerp(cDirt, Math.pow(n2, 4) * 0.5);
+    colors[i]     = tmp.r;
+    colors[i + 1] = tmp.g;
+    colors[i + 2] = tmp.b;
+  }
+
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.computeVertexNormals();
+
+  const mat = new THREE.MeshStandardMaterial({
+    vertexColors: true, roughness: 1.0, metalness: 0.0
+  });
+  const ground = new THREE.Mesh(geo, mat);
+  ground.receiveShadow = true;
+  scene.add(ground);
+}
+
+/* ============================================================
+   5. 小屋
+============================================================ */
+const cabin = new THREE.Group();
+scene.add(cabin);
+
+const LOG_R = 0.18;
+const W = 6, D = 5, WALL_H = 3.0;
+
+const logMats = ['#7d5738', '#8a6242', '#6e4a2f', '#916a48', '#785236']
+  .map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.93, metalness: 0.0 }));
+
+const logGeoX = new THREE.CylinderGeometry(LOG_R, LOG_R, W + 0.5, 9, 1);
+logGeoX.rotateZ(Math.PI / 2);            // 轴朝 X
+const logGeoZ = new THREE.CylinderGeometry(LOG_R, LOG_R, D - 0.42, 9, 1);
+logGeoZ.rotateX(Math.PI / 2);            // 轴朝 Z
+
+const ROWS = 9, GAP = 0.36;
+
+// 前后面（z = ±2.5），轴朝 X
+for (let r = 0; r < ROWS; r++) {
+  const y = LOG_R + r * GAP;
+  const m1 = new THREE.Mesh(logGeoX, logMats[(r * 3 + 1) % logMats.length]);
+  m1.position.set(0, y,  D / 2);
+  const m2 = new THREE.Mesh(logGeoX, logMats[(r * 5 + 2) % logMats.length]);
+  m2.position.set(0, y, -D / 2);
+  cabin.add(m1, m2);
+}
+// 左右面（x = ±3），轴朝 Z
+for (let r = 0; r < ROWS; r++) {
+  const y = LOG_R + r * GAP;
+  const m1 = new THREE.Mesh(logGeoZ, logMats[(r * 7 + 3) % logMats.length]);
+  m1.position.set( W / 2, y, 0);
+  const m2 = new THREE.Mesh(logGeoZ, logMats[(r * 4 + 1) % logMats.length]);
+  m2.position.set(-W / 2, y, 0);
+  cabin.add(m1, m2);
+}
+
+// 山墙（三角）
+function makeGable(span, height, thickness) {
+  const shape = new THREE.Shape();
+  shape.moveTo(-span / 2, 0);
+  shape.lineTo( span / 2, 0);
+  shape.lineTo( 0, height);
+  shape.closePath();
+  const g = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false });
+  g.translate(0, 0, -thickness / 2);
+  g.rotateY(Math.PI / 2);
+  return g;
+}
+{
+  const gGeo = makeGable(D, 1.5, 0.32);
+  const gm = new THREE.MeshStandardMaterial({ color: 0x7b5537, roughness: 0.95 });
+  const g1 = new THREE.Mesh(gGeo, gm); g1.position.set( W / 2, 2.95, 0);
+  const g2 = new THREE.Mesh(gGeo, gm); g2.position.set(-W / 2, 2.95, 0);
+  cabin.add(g1, g2);
+}
+
+// 屋顶
+const ROOF_ANGLE = Math.PI / 6;          // 30°
+const roofMat = new THREE.MeshStandardMaterial({ color: 0x3b2c22, roughness: 0.9, metalness: 0.04 });
+{
+  const len = 3.19, thick = 0.16;
+  const roofGeo = new THREE.BoxGeometry(W + 0.85, thick, len);
+
+  const front = new THREE.Mesh(roofGeo, roofMat);
+  front.position.set(0, 3.7785, 1.4435);
+  front.rotation.x = ROOF_ANGLE;
+
+  const back = new THREE.Mesh(roofGeo, roofMat);
+  back.position.set(0, 3.7785, -1.4435);
+  back.rotation.x = -ROOF_ANGLE;
+
+  cabin.add(front, back);
+
+  // 屋脊压条
+  const ridge = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.11, 0.11, W + 0.9, 8),
+    new THREE.MeshStandardMaterial({ color: 0x2b2019, roughness: 0.85 })
+  );
+  ridge.rotation.z = Math.PI / 2;
+  ridge.position.set(0, 4.55, 0);
+  cabin.add(ridge);
+
+  // 屋檐木条（细节点缀）
+  for (const side of [1, -1]) {
+    const eave = new THREE.Mesh(
+      new THREE.BoxGeometry(W + 0.95, 0.09, 0.16),
+      new THREE.MeshStandardMaterial({ color: 0x2f231b, roughness: 0.9 })
+    );
+    eave.position.set(0, 2.96, side * 2.83);
+    cabin.add(eave);
+  }
+}
+
+// 窗户
+const windowGlowMat = new THREE.MeshStandardMaterial({
+  color: 0xffc070, emissive: 0xffa648, emissiveIntensity: 2.6, roughness: 0.55, metalness: 0.0
+});
+const frameMat = new THREE.MeshStandardMaterial({ color: 0x2a1e15, roughness: 0.85 });
+
+function buildWindow(w, h) {
+  const g = new THREE.Group();
+
+  const back = new THREE.Mesh(new THREE.BoxGeometry(w + 0.16, h + 0.16, 0.14), frameMat);
+  back.position.z = 0.02;
+  g.add(back);
+
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(w, h), windowGlowMat);
+  glass.position.z = 0.10;
+  g.add(glass);
+
+  // 窗棂
+  const barV = new THREE.Mesh(new THREE.BoxGeometry(0.05, h, 0.05), frameMat);
+  barV.position.z = 0.13; g.add(barV);
+  const barH = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, 0.05), frameMat);
+  barH.position.z = 0.13; g.add(barH);
+
+  // 窗台
+  const sill = new THREE.Mesh(new THREE.BoxGeometry(w + 0.34, 0.08, 0.24), frameMat);
+  sill.position.set(0, -h / 2 - 0.12, 0.06);
+  g.add(sill);
+
+  return g;
+}
+
+for (const x of [-1.72, 1.72]) {
+  const win = buildWindow(0.95, 0.9);
+  win.position.set(x, 1.92, D / 2 + 0.13);
+  cabin.add(win);
+
+  const lamp = new THREE.PointLight(0xffa04a, 2.4, 9, 2);
+  lamp.position.set(x, 1.95, D / 2 + 0.7);
+  cabin.add(lamp);
+}
+
+// 门
+{
+  const doorGroup = new THREE.Group();
+  const doorMat = new THREE.MeshStandardMaterial({ color: 0x4a3324, roughness: 0.85 });
+
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(1.12, 2.15, 0.12), doorMat);
+  panel.position.set(0, 1.075, 0);
+  doorGroup.add(panel);
+
+  // 门板竖条
+  for (let i = -1; i <= 1; i++) {
+    const strip = new THREE.Mesh(
+      new THREE.BoxGeometry(0.09, 1.95, 0.03),
+      new THREE.MeshStandardMaterial({ color: 0x3b2819, roughness: 0.9 })
+    );
+    strip.position.set(i * 0.34, 1.08, 0.075);
+    doorGroup.add(strip);
+  }
+
+  // 门框
+  const fm = new THREE.MeshStandardMaterial({ color: 0x2c1f16, roughness: 0.9 });
+  const top = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.14, 0.2), fm);
+  top.position.set(0, 2.22, 0.02);
+  const lf = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.3, 0.2), fm);
+  lf.position.set(-0.63, 1.12, 0.02);
+  const rf = lf.clone(); rf.position.x = 0.63;
+  doorGroup.add(top, lf, rf);
+
+  // 门把手
+  const knob = new THREE.Mesh(
+    new THREE.SphereGeometry(0.055, 12, 10),
+    new THREE.MeshStandardMaterial({ color: 0xc9a05a, roughness: 0.35, metalness: 0.85 })
+  );
+  knob.position.set(0.40, 1.05, 0.09);
+  doorGroup.add(knob);
+
+  doorGroup.position.set(0, 0, D / 2 + 0.14);
+  cabin.add(doorGroup);
+}
+
+// 门廊
+{
+  const deckMat = new THREE.MeshStandardMaterial({ color: 0x60432c, roughness: 0.95 });
+
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(3.9, 0.16, 1.75), deckMat);
+  deck.position.set(0, 0.30, 3.35);
+  cabin.add(deck);
+
+  // 台阶
+  const step = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.16, 0.5), deckMat);
+  step.position.set(0, 0.10, 4.45);
+  cabin.add(step);
+
+  // 柱
+  const pillarGeo = new THREE.CylinderGeometry(0.085, 0.10, 2.15, 8);
+  const pillarMat = new THREE.MeshStandardMaterial({ color: 0x5b3f28, roughness: 0.92 });
+  for (const x of [-1.62, 1.62]) {
+    const p = new THREE.Mesh(pillarGeo, pillarMat);
+    p.position.set(x, 1.44, 4.05);
+    cabin.add(p);
+  }
+
+  // 门廊顶
+  const canopy = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.12, 1.85), roofMat);
+  canopy.position.set(0, 2.44, 3.45);
+  canopy.rotation.x = 0.13;
+  cabin.add(canopy);
+
+  // 栏杆
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(3.7, 0.08, 0.1), deckMat);
+  rail.position.set(0, 0.95, 4.12);
+  cabin.add(rail);
+  for (let i = -3; i <= 3; i++) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.6, 0.07), deckMat);
+    post.position.set(i * 0.52, 0.63, 4.12);
+    cabin.add(post);
+  }
+}
+
+// 门边小提灯
+{
+  const lanternBody = new THREE.Mesh(
+    new THREE.BoxGeometry(0.2, 0.28, 0.2),
+    new THREE.MeshStandardMaterial({
+      color: 0xffc978, emissive: 0xffb050, emissiveIntensity: 3.0,
+      roughness: 0.4, transparent: true, opacity: 0.95
+    })
+  );
+  lanternBody.position.set(0.92, 2.16, D / 2 + 0.26);
+  cabin.add(lanternBody);
+
+  const cap = new THREE.Mesh(
+    new THREE.ConeGeometry(0.17, 0.12, 4),
+    new THREE.MeshStandardMaterial({ color: 0x241a12, roughness: 0.8 })
+  );
+  cap.position.set(0.92, 2.36, D / 2 + 0.26);
+  cap.rotation.y = Math.PI / 4;
+  cabin.add(cap);
+
+  const lanternLight = new THREE.PointLight(0xffb060, 2.2, 7, 2);
+  lanternLight.position.set(0.92, 2.2, D / 2 + 0.5);
+  cabin.add(lanternLight);
+}
+
+// 烟囱
+{
+  const stoneMat = new THREE.MeshStandardMaterial({ color: 0x6a6560, roughness: 1.0 });
+  const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.92, 2.1, 0.92), stoneMat);
+  chimney.position.set(1.72, 4.25, -1.2);
+  cabin.add(chimney);
+
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.16, 1.1), stoneMat);
+  cap.position.set(1.72, 5.38, -1.2);
+  cabin.add(cap);
+
+  // 石块点缀
+  for (let i = 0; i < 10; i++) {
+    const s = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(rand(0.08, 0.15)),
+      new THREE.MeshStandardMaterial({ color: 0x7b7570, roughness: 1.0, flatShading: true })
+    );
+    s.position.set(
+      1.72 + rand(-0.46, 0.46),
+      3.3 + Math.random() * 2.0,
+      -1.2 + rand(-0.46, 0.46)
+    );
+    cabin.add(s);
+  }
+}
+
+// 墙边柴堆
+{
+  const shortLog = new THREE.CylinderGeometry(0.085, 0.085, 0.95, 8);
+  shortLog.rotateX(Math.PI / 2);
+  for (let row = 0; row < 4; row++) {
+    const count = 4 - row;
+    for (let i = 0; i < count; i++) {
+      const m = new THREE.Mesh(shortLog, logMats[(i + row) % logMats.length]);
+      m.position.set(-3.55 + (i - (count - 1) / 2) * 0.19, 0.10 + row * 0.17, 0.45);
+      m.rotation.y = rand(-0.06, 0.06);
+      cabin.add(m);
+    }
+  }
+}
+
+// 木桶
+{
+  const barrel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.30, 0.26, 0.62, 12),
+    new THREE.MeshStandardMaterial({ color: 0x6a4a30, roughness: 0.95 })
+  );
+  barrel.position.set(3.3, 0.31, 2.9);
+  cabin.add(barrel);
+
+  for (const y of [0.13, 0.49]) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.305, 0.024, 6, 16),
+      new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.6, metalness: 0.7 })
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(3.3, y, 2.9);
+    cabin.add(ring);
+  }
+}
+
+// 统一开启阴影
+cabin.traverse(o => {
+  if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+});
+
+/* ============================================================
+   6. 松树（InstancedMesh）
+============================================================ */
+function buildPineGeometry() {
+  const parts = [];
+
+  const paint = (geo, hex) => {
+    const c = new THREE.Color(hex);
+    const n = geo.attributes.position.count;
+    const arr = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
+    geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  };
+
+  const trunk = new THREE.CylinderGeometry(0.14, 0.26, 2.6, 6);
+  trunk.translate(0, 1.3, 0);
+  paint(trunk, '#4a3423');
+  parts.push(trunk);
+
+  const levels = [
+    { y: 1.10, r: 1.55, h: 2.30, c: '#2c4520' },
+    { y: 2.10, r: 1.24, h: 2.05, c: '#33501f' },
+    { y: 3.00, r: 0.94, h: 1.75, c: '#38591f' },
+    { y: 3.80, r: 0.60, h: 1.45, c: '#3d6122' },
+  ];
+  for (const l of levels) {
+    const cone = new THREE.ConeGeometry(l.r, l.h, 7, 1);
+    cone.translate(0, l.y + l.h / 2 - l.h / 2 + l.y * 0, 0); // 保持中心
+    cone.translate(0, l.y, 0);
+    paint(cone, l.c);
+    parts.push(cone);
+  }
+
+  const merged = mergeGeometries(parts, false);
+  merged.computeVertexNormals();
+  return merged;
+}
+
+{
+  const pineGeo = buildPineGeometry();
+  const pineMat = new THREE.MeshStandardMaterial({
+    vertexColors: true, roughness: 1.0, metalness: 0.0, flatShading: true
+  });
+
+  const COUNT = 230;
+  const pines = new THREE.InstancedMesh(pineGeo, pineMat, COUNT);
+  pines.castShadow = true;
+  pines.receiveShadow = true;
+
+  const dummy = new THREE.Object3D();
+  const tint = new THREE.Color();
+
+  for (let i = 0; i < COUNT; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    // 靠内圈更密集，外圈渐疏
+    const radius = 13 + Math.pow(Math.random(), 0.72) * 68;
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+
+    const y = terrainHeight(x, z);
+    const s = rand(0.75, 1.75);
+
+    dummy.position.set(x, y - 0.15, z);
+    dummy.rotation.set(rand(-0.045, 0.045), Math.random() * Math.PI * 2, rand(-0.045, 0.045));
+    dummy.scale.set(s * rand(0.85, 1.12), s * rand(0.92, 1.25), s * rand(0.85, 1.12));
+    dummy.updateMatrix();
+    pines.setMatrixAt(i, dummy.matrix);
+
+    // 每棵树轻微色差，避免“复制粘贴”感
+    const v = rand(0.82, 1.18);
+    tint.setRGB(v * rand(0.92, 1.02), v, v * rand(0.86, 0.98));
+    pines.setColorAt(i, tint);
+  }
+  pines.instanceMatrix.needsUpdate = true;
+  if (pines.instanceColor) pines.instanceColor.needsUpdate = true;
+
+  scene.add(pines);
+}
+
+/* ============================================================
+   7. 地面细节：草丛、石头、树桩、蕨类
+============================================================ */
+// —— 草丛 ——
+{
+  const bladeGeo = new THREE.ConeGeometry(0.075, 0.55, 3, 1);
+  bladeGeo.translate(0, 0.275, 0);
+  const grassMat = new THREE.MeshStandardMaterial({
+    color: 0x4d6428, roughness: 1.0, flatShading: true
+  });
+
+  const COUNT = 2400;
+  const grass = new THREE.InstancedMesh(bladeGeo, grassMat, COUNT);
+  grass.receiveShadow = true;
+
+  const dummy = new THREE.Object3D();
+  const tint = new THREE.Color();
+  let placed = 0, guard = 0;
+
+  while (placed < COUNT && guard < COUNT * 12) {
+    guard++;
+    const a = Math.random() * Math.PI * 2;
+    const r = 4.2 + Math.pow(Math.random(), 0.55) * 34;
+    const x = Math.cos(a) * r;
+    const z = Math.sin(a) * r;
+
+    // 避开小屋与门廊
+    if (x > -4.6 && x < 4.6 && z > -3.8 && z < 5.2) continue;
+
+    const y = terrainHeight(x, z);
+    dummy.position.set(x, y - 0.03, z);
+    dummy.rotation.set(rand(-0.22, 0.22), Math.random() * Math.PI * 2, rand(-0.22, 0.22));
+    const s = rand(0.65, 1.5);
+    dummy.scale.set(s, rand(0.7, 2.3), s);
+    dummy.updateMatrix();
+    grass.setMatrixAt(placed, dummy.matrix);
+
+    const v = rand(0.75, 1.25);
+    tint.setRGB(v * 0.95, v, v * 0.82);
+    grass.setColorAt(placed, tint);
+
+    placed++;
+  }
+  grass.instanceMatrix.needsUpdate = true;
+  if (grass.instanceColor) grass.instanceColor.needsUpdate = true;
+  scene.add(grass);
+}
+
+// —— 石头 ——
+{
+  const stoneMat = new THREE.MeshStandardMaterial({
+    color: 0x6b6560, roughness: 1.0, flatShading: true
+  });
+  for (let i = 0; i < 46; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = rand(5, 34);
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    if (x > -5 && x < 5 && z > -4.5 && z < 5.5) continue;
+
+    const s = rand(0.12, 0.48);
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), stoneMat);
+    rock.position.set(x, terrainHeight(x, z) + s * 0.45, z);
+    rock.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+    rock.scale.y = rand(0.55, 0.9);
+    rock.castShadow = true;
+    rock.receiveShadow = true;
+    scene.add(rock);
+  }
+}
+
+// —— 树桩 ——
+{
+  const stumpMat = new THREE.MeshStandardMaterial({ color: 0x4a3524, roughness: 1.0 });
+  const topMat = new THREE.MeshStandardMaterial({ color: 0x8a6b46, roughness: 0.95 });
+  for (let i = 0; i < 7; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = rand(7, 22);
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    const h = rand(0.35, 0.75);
+    const rad = rand(0.18, 0.34);
+
+    const stump = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad * 1.15, h, 9), stumpMat);
+    stump.position.set(x, terrainHeight(x, z) + h / 2 - 0.05, z);
+    stump.castShadow = true; stump.receiveShadow = true;
+    scene.add(stump);
+
+    const top = new THREE.Mesh(new THREE.CircleGeometry(rad, 9), topMat);
+    top.rotation.x = -Math.PI / 2;
+    top.position.set(x, terrainHeight(x, z) + h - 0.05, z);
+    top.receiveShadow = true;
+    scene.add(top);
+  }
+}
+
+// —— 蕨类小丛 ——
+{
+  const fernMat = new THREE.MeshStandardMaterial({
+    color: 0x3f5a24, roughness: 1.0, flatShading: true, side: THREE.DoubleSide
+  });
+  const fernGeo = new THREE.ConeGeometry(0.34, 0.62, 4, 1, true);
+
+  for (let i = 0; i < 90; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = rand(4.5, 26);
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    if (x > -4.5 && x < 4.5 && z > -4 && z < 5) continue;
+
+    const fern = new THREE.Mesh(fernGeo, fernMat);
+    const s = rand(0.6, 1.4);
+    fern.position.set(x, terrainHeight(x, z) + 0.28 * s, z);
+    fern.rotation.y = Math.random() * Math.PI;
+    fern.rotation.z = rand(-0.25, 0.25);
+    fern.scale.setScalar(s);
+    fern.castShadow = true;
+    scene.add(fern);
+  }
+}
+
+/* ============================================================
+   8. 烟囱炊烟
+============================================================ */
+const smokeSprites = [];
+{
+  const smokeTex = makeSoftTexture(128, 0.36);
+  const SMOKE_COUNT = 34;
+  const origin = new THREE.Vector3(1.72, 5.5, -1.2);
+
+  for (let i = 0; i < SMOKE_COUNT; i++) {
+    const mat = new THREE.SpriteMaterial({
+      map: smokeTex,
+      color: new THREE.Color(0xd8d2cc),
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.NormalBlending,
+      fog: true
+    });
+    const s = new THREE.Sprite(mat);
+    scene.add(s);
+
+    smokeSprites.push({
+      sprite: s,
+      life: Math.random(),
+      speed: rand(0.075, 0.135),
+      driftX: rand(-0.16, 0.16),
+      driftZ: rand(-0.12, 0.12),
+      spin: rand(-0.5, 0.5),
+      origin
+    });
+  }
+}
+
+function updateSmoke(dt) {
+  for (const p of smokeSprites) {
+    p.life += dt * p.speed;
+    if (p.life > 1) {
+      p.life -= 1;
+      p.driftX = rand(-0.16, 0.16);
+      p.driftZ = rand(-0.12, 0.12);
+    }
+    const t = p.life;
+    const o = p.origin;
+
+    p.sprite.position.set(
+      o.x + p.driftX * t * 9 + Math.sin(t * 5.5 + p.spin) * 0.5 * t,
+      o.y + t * 7.2,
+      o.z + p.driftZ * t * 9 + Math.cos(t * 4.2 + p.spin) * 0.4 * t
+    );
+
+    const sc = 0.5 + t * 3.6;
+    p.sprite.scale.setScalar(sc);
+
+    // 先淡入，后淡出
+    const fadeIn  = THREE.MathUtils.smoothstep(t, 0.0, 0.12);
+    const fadeOut = 1.0 - THREE.MathUtils.smoothstep(t, 0.35, 1.0);
+    p.sprite.material.opacity = 0.34 * fadeIn * fadeOut;
+    p.sprite.material.rotation = p.spin * t * 2;
+  }
+}
+
+/* ============================================================
+   9. 萤火虫 / 浮尘
+============================================================ */
+let fireflyMat;
+{
+  const COUNT = 520;
+  const positions = new Float32Array(COUNT * 3);
+  const phases = new Float32Array(COUNT);
+  const sizes = new Float32Array(COUNT);
+
+  for (let i = 0; i < COUNT; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.pow(Math.random(), 0.65) * 30;
+    const x = Math.cos(a) * r;
+    const z = Math.sin(a) * r;
+    positions[i * 3]     = x;
+    positions[i * 3 + 1] = rand(0.4, 4.2);
+    positions[i * 3 + 2] = z;
+    phases[i] = Math.random() * Math.PI * 2;
+    sizes[i] = rand(4, 13);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
+  geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+
+  fireflyMat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: {
+      uTime: { value: 0 },
+      uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) }
+    },
+    vertexShader: /* glsl */`
+      uniform float uTime;
+      uniform float uPixelRatio;
+      attribute float aPhase;
+      attribute float aSize;
+      varying float vAlpha;
+
+      void main() {
+        vec3 p = position;
+        p.y += sin(uTime * 0.65 + aPhase) * 0.5;
+        p.x += sin(uTime * 0.42 + aPhase * 1.7) * 0.7;
+        p.z += cos(uTime * 0.48 + aPhase * 2.3) * 0.7;
+
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_PointSize = aSize * uPixelRatio * (55.0 / max(-mv.z, 0.001));
+        gl_Position = projectionMatrix * mv;
+
+        vAlpha = 0.25 + 0.75 * (0.5 + 0.5 * sin(uTime * 2.1 + aPhase * 3.4));
+      }
+    `,
+    fragmentShader: /* glsl */`
+      varying float vAlpha;
+      void main() {
+        vec2 d = gl_PointCoord - vec2(0.5);
+        float dist = length(d);
+        if (dist > 0.5) discard;
+        float a = smoothstep(0.5, 0.0, dist);
+        a = pow(a, 1.6);
+        vec3 col = vec3(1.0, 0.82, 0.42) * (0.5 + a * 1.4);
+        gl_FragColor = vec4(col, a * vAlpha);
+      }
+    `
+  });
+
+  scene.add(new THREE.Points(geo, fireflyMat));
+}
+
+/* ============================================================
+   10. 后期处理
+============================================================ */
+const composer = new EffectComposer(renderer);
+composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+composer.setSize(window.innerWidth, window.innerHeight);
+
+const renderPass = new RenderPass(scene, camera);
+composer.addPass(renderPass);
+
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.42,   // strength
+  0.75,   // radius
+  0.86    // threshold
+);
+composer.addPass(bloomPass);
+
+const outputPass = new OutputPass();
+composer.addPass(outputPass);
+
+/* ============================================================
+   11. 循环 & 事件
+============================================================ */
+const clock = new THREE.Clock();
+
+function onResize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+
+  renderer.setSize(w, h);
+  composer.setSize(w, h);
+  bloomPass.resolution.set(w, h);
+
+  if (fireflyMat) fireflyMat.uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio, 2);
+}
+window.addEventListener('resize', onResize);
+
+let elapsed = 0;
+
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  elapsed += dt;
+
+  updateSmoke(dt);
+
+  if (fireflyMat) fireflyMat.uniforms.uTime.value = elapsed;
+
+  // 极轻微的“呼吸”式曝光，增强电影感
+  renderer.toneMappingExposure = 1.02 + Math.sin(elapsed * 0.35) * 0.015;
+
+  controls.update();
+  composer.render();
+});
+
+// 开场淡出
+window.addEventListener('load', () => {
+  requestAnimationFrame(() => {
+    setTimeout(() => document.getElementById('curtain').classList.add('gone'), 120);
+  });
+});
+
+// 首帧后立即尝试淡出（防止 load 已触发）
+setTimeout(() => document.getElementById('curtain')?.classList.add('gone'), 900);
+</script>
+</body>
+</html>
