@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D 场景厅 · 神奇的乔治亚</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🏞️%3C/text%3E%3C/svg%3E">
+  <meta name="description" content="神奇的乔治亚的 3D 网页场景：程序化森林与木屋，纯前端实时渲染">
+  <style>
+    /* ===== 主题变量：浅色模式 ===== */
+    :root {
+      --bg: #f5f6fa;
+      --bg-card: #ffffff;
+      --text: #1f2430;
+      --text-sub: #5c6370;
+      --accent: #4f7cff;
+      --accent-2: #9b59ff;
+      --border: rgba(0, 0, 0, 0.08);
+      --shadow: 0 8px 24px rgba(31, 36, 48, 0.08);
+      --shadow-hover: 0 16px 40px rgba(79, 124, 255, 0.18);
+    }
+
+    /* ===== 深色模式 ===== */
+    [data-theme="dark"] {
+      --bg: #12141c;
+      --bg-card: #1b1e2a;
+      --text: #e8eaf2;
+      --text-sub: #9aa1b2;
+      --accent: #6d93ff;
+      --accent-2: #b57bff;
+      --border: rgba(255, 255, 255, 0.08);
+      --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      --shadow-hover: 0 16px 40px rgba(109, 147, 255, 0.25);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      transition: background 0.4s ease, color 0.4s ease;
+      min-height: 100vh;
+    }
+
+    /* ===== 背景装饰光斑 ===== */
+    .bg-glow {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.35;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .glow-1 { width: 480px; height: 480px; background: var(--accent); top: -160px; right: -120px; }
+    .glow-2 { width: 380px; height: 380px; background: var(--accent-2); bottom: -140px; left: -100px; }
+
+    main { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+    /* ===== 顶部导航 ===== */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 28px 0;
+    }
+    .logo { font-weight: 700; font-size: 18px; letter-spacing: 1px; color: var(--text); text-decoration: none; }
+    .logo span { color: var(--accent); }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+
+    .nav-link {
+      padding: 8px 18px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: var(--shadow);
+      transition: transform 0.25s ease, border-color 0.25s ease;
+    }
+    .nav-link:hover { transform: translateY(-2px); border-color: var(--accent); }
+
+    .theme-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text);
+      font-size: 20px;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .theme-btn:hover { transform: rotate(30deg) scale(1.1); }
+
+    /* ===== 首屏区域 ===== */
+    .hero { text-align: center; padding: 56px 0 48px; }
+
+    .hero-icon {
+      width: 88px;
+      height: 88px;
+      margin: 0 auto 20px;
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 42px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: var(--shadow-hover);
+      animation: float 4s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    h1 {
+      font-size: clamp(28px, 5vw, 44px);
+      font-weight: 800;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 12px;
+    }
+
+    .tagline {
+      font-size: clamp(14px, 2.5vw, 17px);
+      color: var(--text-sub);
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    /* ===== 分区标题 ===== */
+    section h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    section h2::before {
+      content: "";
+      width: 6px;
+      height: 24px;
+      border-radius: 3px;
+      background: linear-gradient(180deg, var(--accent), var(--accent-2));
+    }
+    .section-sub { color: var(--text-sub); font-size: 14px; margin: 0 0 24px; }
+
+    /* ===== 项目卡片网格 ===== */
+    .grid-section { padding: 8px 0 64px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 24px;
+    }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 26px;
+      box-shadow: var(--shadow);
+      transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    .card.visible {
+      opacity: 1;
+      transform: translateY(0);
+      transition: opacity 0.6s ease, transform 0.6s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    }
+    .card:hover {
+      transform: translateY(-8px) !important;
+      box-shadow: var(--shadow-hover);
+      border-color: var(--accent);
+    }
+    .card-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      margin-bottom: 18px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+    }
+    .card h3 { font-size: 19px; margin-bottom: 8px; }
+    .card p { font-size: 14px; color: var(--text-sub); margin-bottom: 18px; min-height: 44px; }
+
+    /* ===== 「打开」按钮 ===== */
+    .btn-play {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 20px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      box-shadow: var(--shadow);
+      transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease;
+    }
+    .btn-play:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); filter: brightness(1.08); }
+
+    .loading { color: var(--text-sub); font-size: 14px; }
+
+    /* ===== 页脚 ===== */
+    footer {
+      text-align: center;
+      padding: 36px 24px 48px;
+      color: var(--text-sub);
+      font-size: 13px;
+      border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ===== 小屏适配 ===== */
+    @media (max-width: 520px) {
+      .hero { padding: 40px 0 32px; }
+      .grid { grid-template-columns: 1fr; }
+      .nav-link { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-glow glow-1"></div>
+  <div class="bg-glow glow-2"></div>
+
+  <main>
+    <!-- 顶部：站名 + 返回主页 + 深色模式开关 -->
+    <header>
+      <a class="logo" href="../">乔治亚<span>.lab</span></a>
+      <div class="header-right">
+        <a class="nav-link" href="../">← 返回主页</a>
+        <button class="theme-btn" id="themeBtn" title="切换深色 / 浅色模式" aria-label="切换主题">🌙</button>
+      </div>
+    </header>
+
+    <!-- 首屏 -->
+    <section class="hero">
+      <div class="hero-icon">🏞️</div>
+      <h1>3D 场景厅</h1>
+      <p class="tagline">纯前端实时渲染的 3D 场景，打开即看、可自由旋转视角</p>
+    </section>
+
+    <!-- 场景列表 -->
+    <section class="grid-section">
+      <h2>全部场景</h2>
+      <p class="section-sub">放入 scenes/ 文件夹（含 index.html + 简介.txt）即可自动上架</p>
+      <div class="grid" id="sceneGrid"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>本页所有项目均与 <a href="https://github.com/sst/opencode" target="_blank" rel="noopener">OpenCode</a> 共同创作 🤝</p>
+    <p>© 2026 神奇的乔治亚 · Powered by GitHub Pages</p>
+  </footer>
+
+  <script>
+    // ===== 深色 / 浅色模式切换（记忆用户选择）=====
+    // 注意：iOS 隐私模式等环境下 localStorage 读写会直接抛异常，
+    // 必须全程 try/catch，否则脚本在绑定按钮事件前就会中断，导致无法切换主题。
+    const store = {
+      get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+      set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* 隐私模式下忽略 */ } }
+    };
+
+    const themeBtn = document.getElementById("themeBtn");
+    let currentTheme = "light";
+    try {
+      const savedTheme = store.get("theme");
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      currentTheme = savedTheme || (prefersDark ? "dark" : "light");
+    } catch (e) { /* 保持浅色 */ }
+
+    function applyTheme(mode) {
+      currentTheme = mode;
+      document.documentElement.setAttribute("data-theme", mode);
+      themeBtn.textContent = mode === "dark" ? "☀️" : "🌙";
+      store.set("theme", mode);
+    }
+    applyTheme(currentTheme);
+
+    themeBtn.addEventListener("click", () => {
+      applyTheme(currentTheme === "dark" ? "light" : "dark");
+    });
+
+    // ===== 卡片滚动入场动画 =====
+    function initScrollAnimation(root) {
+      const observer = new IntersectionObserver(entries => {
+        entries.forEach((entry, i) => {
+          if (entry.isIntersecting) {
+            setTimeout(() => entry.target.classList.add("visible"), i * 120);
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.15 });
+      root.querySelectorAll(".card").forEach(card => observer.observe(card));
+    }
+
+    // ===== HTML 转义（防止 API 返回内容注入脚本）=====
+    function escapeHTML(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    // ===== 场景列表：扫描本仓库 scenes/ 目录 =====
+    // 约定：scenes/ 下每个同时包含 index.html 和 简介.txt 的文件夹即为一个场景；
+    // 简介.txt 第一行为标题，其余行为简介。
+    const SUB_DIR = 'scenes';
+    const CARD_ICON = '🏞️';
+    const REPO_CONTENTS = 'https://api.github.com/repos/sqdqzy/sqdqzy.github.io/contents/';
+
+    async function loadScenes() {
+      const res = await fetch(REPO_CONTENTS + SUB_DIR);
+      if (!res.ok) throw new Error('GitHub API 请求失败');
+      const items = await res.json();
+      const dirs = items.filter(i => i.type === 'dir');
+      const out = [];
+      for (const d of dirs) {
+        try {
+          const r = await fetch(REPO_CONTENTS + SUB_DIR + '/' + encodeURIComponent(d.name) + '/' + encodeURIComponent('简介.txt'));
+          if (!r.ok) continue;   // 缺少简介.txt 的文件夹不算场景
+          const j = await r.json();
+          const text = new TextDecoder().decode(Uint8Array.from(atob((j.content || '').replace(/\s/g, '')), c => c.charCodeAt(0)));
+          const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
+          if (lines.length === 0) continue;
+          out.push({ name: d.name, title: lines[0], desc: lines.slice(1).join(' ') || '点击查看场景' });
+        } catch (e) { /* 跳过读取异常的文件夹 */ }
+      }
+      return out;
+    }
+
+    async function renderScenes() {
+      const grid = document.getElementById('sceneGrid');
+      grid.innerHTML = '<p class="loading">正在加载场景列表...</p>';
+      try {
+        const list = await loadScenes();
+        grid.innerHTML = list.length === 0
+          ? '<p class="loading">暂无场景（往 scenes/ 放「文件夹 + index.html + 简介.txt」即可自动出现）</p>'
+          : list.map(p => `
+            <article class="card">
+              <div class="card-icon">${CARD_ICON}</div>
+              <h3>${escapeHTML(p.title)}</h3>
+              <p>${escapeHTML(p.desc)}</p>
+              <div class="card-links">
+                <a class="btn-play" href="./${SUB_DIR}/${encodeURIComponent(p.name)}/" target="_blank" rel="noopener">▶ 查看场景</a>
+              </div>
+            </article>`).join('');
+        initScrollAnimation(grid);
+      } catch (error) {
+        grid.innerHTML = '<p class="loading">场景列表加载失败，请刷新重试</p>';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', renderScenes);
+  </script>
+</body>
+</html>
