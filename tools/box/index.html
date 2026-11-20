@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>工具箱 · 全部小工具</title>
+<style>
+:root{
+  --bg:#0f1115; --card:#1a1d24; --fg:#e8eaed; --sub:#9aa0a6;
+  --accent:#4c8dff; --warn:#ff9f43; --ok:#28c76f; --err:#ff6b6b;
+  --line:#2a2f3a; --input:#0b0d11;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--fg);
+  font-family:-apple-system,"PingFang SC","Noto Sans CJK SC",system-ui,sans-serif;
+  display:flex;flex-direction:column;
+}
+/* 顶部标签栏 */
+.tabbar{
+  flex:0 0 auto;background:var(--card);border-bottom:1px solid var(--line);
+  padding:8px 10px 0;
+}
+.tabs{
+  display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;
+}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{
+  flex:0 0 auto;padding:9px 15px;border:0;background:transparent;color:var(--sub);
+  font-size:13.5px;font-weight:600;border-radius:10px 10px 0 0;cursor:pointer;
+  font-family:inherit;transition:.15s;white-space:nowrap;border-bottom:2px solid transparent;
+}
+.tabs button:hover{color:var(--fg)}
+.tabs button.active{color:#fff;background:rgba(76,141,255,.14);border-bottom-color:var(--accent)}
+/* 内容区 */
+.frame-wrap{flex:1;position:relative;min-height:0}
+iframe{
+  position:absolute;inset:0;width:100%;height:100%;border:0;
+  background:var(--bg);color-scheme:dark;
+}
+iframe[hidden]{display:none}
+/* 返回链接浮标 */
+.back-home{
+  position:fixed;right:12px;bottom:12px;z-index:10;
+  padding:8px 14px;border-radius:999px;border:1px solid var(--line);
+  background:rgba(26,29,36,.92);color:var(--sub);text-decoration:none;
+  font-size:12.5px;backdrop-filter:blur(6px);transition:.15s;
+}
+.back-home:hover{color:var(--fg);border-color:var(--accent)}
+/* 小屏：更紧凑 */
+@media (max-width:520px){
+  .tabs button{padding:8px 11px;font-size:12.5px}
+  .back-home{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="tabbar">
+  <div class="tabs" role="tablist" id="tabs"></div>
+</div>
+
+<div class="frame-wrap" id="frames"></div>
+
+<a class="back-home" href="../../index.html" title="返回个人主页">← 主页</a>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var tabsEl = $('tabs'), framesEl = $('frames');
+
+  // 工具清单：id=深链锚点，t=标签文本，src=模块文件，title=浏览器标题
+  var TOOLS = [
+    { id:'clock',    t:'⏱ 时钟',      src:'clock.html',         title:'时钟工具箱' },
+    { id:'json',     t:'🧩 编码',      src:'json.html',          title:'编码工具箱' },
+    { id:'regex',    t:'🎯 正则',      src:'regex.html',         title:'正则测试器' },
+    { id:'password', t:'🔑 密码',      src:'password.html',      title:'密码生成器' },
+    { id:'qr',       t:'▣ 二维码',     src:'qr.html',            title:'二维码生成器' },
+    { id:'image',    t:'🖼 图片压缩',  src:'image.html',         title:'图片压缩' }
+  ];
+  // 时钟模块内部的子标签（深链用）：#timer / #pomodoro / #timestamp
+  var CLOCK_SUBS = { timer:1, pomodoro:1, timestamp:1 };
+
+  var buttons = {};
+  TOOLS.forEach(function(tool){
+    var b = document.createElement('button');
+    b.textContent = tool.t;
+    b.setAttribute('role','tab');
+    b.addEventListener('click', function(){ select(tool.id, true); });
+    tabsEl.appendChild(b);
+    buttons[tool.id] = b;
+  });
+
+  // 每个工具一个常驻 iframe：首次用到才创建，切走只隐藏，
+  // 这样计时器 / 番茄钟跑到一半切去看别的，回来仍在继续。
+  var frames = {};
+  function ensureFrame(tool){
+    if (frames[tool.id]) return frames[tool.id];
+    var f = document.createElement('iframe');
+    f.title = tool.title;
+    f.setAttribute('allow', 'clipboard-write; wake-lock; notifications');
+    f.src = tool.src;
+    f.hidden = true;
+    framesEl.appendChild(f);
+    frames[tool.id] = f;
+    return f;
+  }
+
+  var current = null, pendingClockSub = null;
+  function showClockSub(name){
+    var f = frames.clock;
+    if (!f || !f.contentWindow) return;
+    try{ f.contentWindow.postMessage({ type:'clock-tab', name:name }, '*'); }catch(e){}
+  }
+
+  function select(id, pushHash){
+    // 时钟子标签深链（#timer / #pomodoro / #timestamp）落到时钟模块
+    var sub = CLOCK_SUBS[id] ? id : null;
+    var tool = null;
+    for (var i = 0; i < TOOLS.length; i++) if (TOOLS[i].id === (sub ? 'clock' : id)) tool = TOOLS[i];
+    if (!tool) tool = TOOLS[0];
+    current = tool.id;
+    Object.keys(buttons).forEach(function(k){
+      buttons[k].classList.toggle('active', k === current);
+      buttons[k].setAttribute('aria-selected', k === current ? 'true' : 'false');
+    });
+    var f = ensureFrame(tool);
+    Object.keys(frames).forEach(function(k){ frames[k].hidden = (k !== current); });
+    if (sub){
+      if (f.dataset.loaded === '1') showClockSub(sub);
+      else pendingClockSub = sub;       // 等 iframe 就绪后再切
+    }
+    f.addEventListener('load', function(){
+      f.dataset.loaded = '1';
+      if (tool.id === 'clock' && pendingClockSub){ showClockSub(pendingClockSub); pendingClockSub = null; }
+    }, { once:true });
+    document.title = tool.title + ' · 工具箱';
+    if (pushHash && location.hash.slice(1) !== id){
+      try{ history.replaceState(null, '', '#' + id); }catch(e){ location.hash = id; }
+    }
+    // 手机上标签多时滚动到可见
+    if (buttons[current] && buttons[current].scrollIntoView){
+      try{ buttons[current].scrollIntoView({ block:'nearest', inline:'nearest' }); }catch(e){}
+    }
+  }
+
+  // 模块内部改标题时（如番茄钟倒计时），同步到浏览器标签
+  window.addEventListener('message', function(e){
+    if (e.data && e.data.type === 'toolbox-title' && typeof e.data.title === 'string'){
+      // 只有当前可见模块的标题才生效，避免后台番茄钟抢标题
+      var f = frames[current];
+      if (f && e.source === f.contentWindow) document.title = e.data.title + ' · 工具箱';
+    }
+  });
+
+  // 深链：#clock / #json / #regex / #password / #qr / #image
+  // 兼容旧锚点：#time → clock；#timer / #pomodoro / #timestamp → 时钟子标签
+  function fromHash(){
+    var h = location.hash.slice(1);
+    if (h === 'time') h = 'clock';
+    select(h, false);
+  }
+  window.addEventListener('hashchange', fromHash);
+  fromHash();
+})();
+</script>
+
+</body>
+</html>
